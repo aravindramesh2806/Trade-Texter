@@ -1,0 +1,18 @@
+# Logs
+*.log
+tradealerts.log
+intraday.log
+
+# State files (runtime, not code)
+intraday_state.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Sensitive — never commit credentials
+# (tokens are in the scripts — rotate them after pushing)

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live US Stocks</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --green: #3fb950;
+      --red: #f85149;
+      --accent: #58a6ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+    #cors-warning {
+      background: #2d1b00;
+      border: 1px solid #f0a500;
+      color: #f0a500;
+      padding: 12px 24px;
+      font-size: 13px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+    }
+    #cors-warning code {
+      background: rgba(255,255,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header h1 { font-size: 18px; font-weight: 600; }
+    #status {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      display: inline-block;
+    }
+    #dot.live { background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .controls input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      width: 200px;
+      text-transform: uppercase;
+    }
+    .controls input::placeholder { text-transform: none; color: var(--muted); }
+    .controls button {
+      background: var(--accent);
+      color: #0d1117;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .controls button:hover { opacity: 0.85; }
+    .controls button.secondary {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 400;
+    }
+    #refresh-timer { font-size: 12px; color: var(--muted); margin-left: auto; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      padding: 20px 24px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      transition: border-color 0.15s;
+    }
+    .card:hover { border-color: var(--accent); }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .ticker { font-size: 16px; font-weight: 700; }
+    .company { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .remove-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 0;
+      line-height: 1;
+    }
+    .remove-btn:hover { color: var(--red); }
+    .price { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+    .change { font-size: 13px; font-weight: 600; }
+    .change.up { color: var(--green); }
+    .change.down { color: var(--red); }
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .stat label { font-size: 10px; color: var(--muted); display: block; }
+    .stat span { font-size: 12px; font-weight: 500; }
+    .card-loading {
+      opacity: 0.5;
+      text-align: center;
+      padding: 24px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .card-error {
+      color: var(--red);
+      font-size: 11px;
+      margin-top: 8px;
+      word-break: break-all;
+    }
+    .market-bar {
+      display: flex;
+      gap: 24px;
+      padding: 10px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      overflow-x: auto;
+    }
+    .market-item { display: flex; gap: 8px; white-space: nowrap; align-items: center; }
+    .market-item strong { color: var(--muted); font-weight: 500; }
+    #empty {
+      text-align: center;
+      padding: 60px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+<div id="cors-warning">
+  ⚠️ <strong>CORS error detected.</strong> Open via local server instead:
+  open Terminal → <code>cd "/Users/aravind/Documents/Claude/Projects/Trading view"</code> → <code>python3 -m http.server 8080</code> → visit <a href="http://localhost:8080/live-stocks.html" style="color:#f0a500">http://localhost:8080/live-stocks.html</a>
+</div>
+
+<header>
+  <h1>📈 Live US Stocks</h1>
+  <div id="status">
+    <span id="dot"></span>
+    <span id="status-text">Loading...</span>
+  </div>
+</header>
+
+<div class="market-bar" id="market-bar">
+  <span style="color:var(--muted); font-size:12px">Loading indices...</span>
+</div>
+
+<div class="controls">
+  <input id="ticker-input" type="text" placeholder="Add ticker (e.g. AAPL)" maxlength="10" />
+  <button onclick="addTicker()">+ Add</button>
+  <button class="secondary" onclick="refreshAll()">⟳ Refresh</button>
+  <button class="secondary" onclick="loadDefaults()">Reset defaults</button>
+  <span id="refresh-timer"></span>
+</div>
+
+<div class="grid" id="grid"></div>
+<div id="empty" style="display:none">No tickers. Add one above.</div>
+
+<script>
+const DEFAULT_TICKERS = ['AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','SPY','QQQ'];
+const INDEX_TICKERS = ['SPY','QQQ','DIA','IWM'];
+
+let tickers = JSON.parse(localStorage.getItem('watchlist') || 'null') || [...DEFAULT_TICKERS];
+let quoteCache = {};
+let countdown = 30;
+let timerInterval = null;
+let corsErrorShown = false;
+
+async function fetchQuotes(symbols) {
+  const url = `/api/quotes?symbols=${symbols.join(',')}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const data = await resp.json();
+  return data.result;
+}
+
+function fmt(n) {
+  if (n == null || n === 0) return '—';
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function renderCard(symbol, q) {
+  const change = q?.regularMarketChange ?? 0;
+  const changePct = q?.regularMarketChangePercent ?? 0;
+  const price = q?.regularMarketPrice ?? 0;
+  const dir = change >= 0 ? 'up' : 'down';
+  const arrow = change >= 0 ? '▲' : '▼';
+  return `
+    <div class="card-top">
+      <div>
+        <div class="ticker">${symbol}</div>
+        <div class="company">${q?.shortName || ''}</div>
+      </div>
+      <button class="remove-btn" onclick="removeTicker('${symbol}')">×</button>
+    </div>
+    <div class="price">$${fmt(price)}</div>
+    <div class="change ${dir}">
+      ${arrow} ${fmt(Math.abs(change))} (${fmt(Math.abs(changePct))}%)
+      <span style="color:var(--muted);font-weight:400;font-size:11px;margin-left:6px">today</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><label>Open</label><span>$${fmt(q?.regularMarketOpen)}</span></div>
+      <div class="stat"><label>Prev Close</label><span>$${fmt(q?.regularMarketPreviousClose)}</span></div>
+      <div class="stat"><label>High</label><span>$${fmt(q?.regularMarketDayHigh)}</span></div>
+      <div class="stat"><label>Low</label><span>$${fmt(q?.regularMarketDayLow)}</span></div>
+    </div>`;
+}
+
+async function refreshAll() {
+  document.getElementById('empty').style.display = tickers.length ? 'none' : 'block';
+  if (!tickers.length) return;
+  setStatus('Refreshing...', false);
+  const grid = document.getElementById('grid');
+  grid.innerHTML = tickers.map(s => `
+    <div class="card" id="card-${s}">
+      <div class="card-loading">Loading ${s}…</div>
+    </div>`).join('');
+  try {
+    const results = await fetchQuotes(tickers);
+    const bySymbol = {};
+    results.forEach(r => bySymbol[r.symbol] = r);
+    tickers.forEach(sym => {
+      const el = document.getElementById(`card-${sym}`);
+      if (!el) return;
+      const q = bySymbol[sym];
+      if (!q || !q.regularMarketPrice) {
+        el.innerHTML = `
+          <div class="card-top"><div><div class="ticker">${sym}</div></div>
+          <button class="remove-btn" onclick="removeTicker('${sym}')">×</button></div>
+          <div class="card-error">Unknown ticker</div>`;
+      } else {
+        quoteCache[sym] = q;
+        el.innerHTML = renderCard(sym, q);
+      }
+    });
+    setStatus(`Updated ${new Date().toLocaleTimeString()}`, true);
+  } catch(e) {
+    if (!corsErrorShown && (e.message.includes('Failed to fetch') || e.message.includes('NetworkError'))) {
+      corsErrorShown = true;
+      document.getElementById('cors-warning').style.display = 'flex';
+    }
+    setStatus(`Error: ${e.message}`, false);
+  }
+  await refreshMarketBar();
+  countdown = 30;
+}
+
+async function loadCard(symbol) {
+  try {
+    const results = await fetchQuotes([symbol]);
+    const q = results[0];
+    const el = document.getElementById(`card-${symbol}`);
+    if (!el) return;
+    if (!q?.regularMarketPrice) {
+      el.innerHTML = `
+        <div class="card-top"><div><div class="ticker">${symbol}</div></div>
+        <button class="remove-btn" onclick="removeTicker('${symbol}')">×</button></div>
+        <div class="card-error">Unknown ticker</div>`;
+    } else {
+      quoteCache[symbol] = q;
+      el.innerHTML = renderCard(symbol, q);
+    }
+  } catch(e) {
+    const el = document.getElementById(`card-${symbol}`);
+    if (el) el.innerHTML = `
+      <div class="card-top"><div><div class="ticker">${symbol}</div></div>
+      <button class="remove-btn" onclick="removeTicker('${symbol}')">×</button></div>
+      <div class="card-error">Error: ${e.message}</div>`;
+  }
+}
+
+async function refreshMarketBar() {
+  try {
+    const results = await fetchQuotes(INDEX_TICKERS);
+    const bySymbol = {};
+    results.forEach(r => bySymbol[r.symbol] = r);
+    document.getElementById('market-bar').innerHTML = INDEX_TICKERS.map(sym => {
+      const q = bySymbol[sym];
+      const up = (q?.regularMarketChangePercent ?? 0) >= 0;
+      return `<div class="market-item">
+        <strong>${sym}</strong>
+        <span>$${fmt(q?.regularMarketPrice)}</span>
+        <span style="color:${up ? 'var(--green)' : 'var(--red)'}">${up ? '▲' : '▼'} ${fmt(Math.abs(q?.regularMarketChangePercent ?? 0))}%</span>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+function setStatus(text, live) {
+  document.getElementById('status-text').textContent = text;
+  document.getElementById('dot').className = live ? 'live' : '';
+}
+
+function addTicker() {
+  const input = document.getElementById('ticker-input');
+  const sym = input.value.trim().toUpperCase();
+  if (!sym || tickers.includes(sym)) { input.value = ''; return; }
+  tickers.push(sym);
+  saveTickers();
+  input.value = '';
+  const grid = document.getElementById('grid');
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.id = `card-${sym}`;
+  div.innerHTML = `<div class="card-loading">Loading ${sym}…</div>`;
+  grid.appendChild(div);
+  loadCard(sym);
+  document.getElementById('empty').style.display = 'none';
+}
+
+function removeTicker(sym) {
+  tickers = tickers.filter(s => s !== sym);
+  saveTickers();
+  document.getElementById(`card-${sym}`)?.remove();
+  document.getElementById('empty').style.display = tickers.length ? 'none' : 'block';
+}
+
+function loadDefaults() {
+  tickers = [...DEFAULT_TICKERS];
+  quoteCache = {};
+  saveTickers();
+  refreshAll();
+}
+
+function saveTickers() {
+  localStorage.setItem('watchlist', JSON.stringify(tickers));
+}
+
+document.getElementById('ticker-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addTicker();
+});
+
+// Auto-refresh countdown
+timerInterval = setInterval(() => {
+  countdown--;
+  document.getElementById('refresh-timer').textContent = `Auto-refresh in ${countdown}s`;
+  if (countdown <= 0) refreshAll();
+}, 1000);
+
+refreshAll();
+</script>
+</body>
+</html>
