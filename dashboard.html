@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>McLean Trade Bot</title>
+  <style>
+    :root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--green:#3fb950;--red:#f85149;--accent:#58a6ff;--amber:#d29922;--purple:#bc8cff;--orange:#f0883e;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;}
+
+    /* ── Server warning ── */
+    #server-warning{display:none;background:#2d1b00;border-bottom:1px solid #f0a500;color:#f0a500;padding:10px 20px;font-size:13px;align-items:center;gap:10px;}
+    #server-warning code{background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;font-family:monospace;}
+
+    /* ── Header ── */
+    header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);gap:12px;flex-wrap:wrap;}
+    .logo{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;}
+    .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
+    .scanning-dot{background:var(--amber)!important;}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+    .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .scan-info{font-size:12px;color:var(--muted);text-align:right;}
+    .scan-info span{color:var(--text);}
+    .btn{padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text);}
+    .btn:hover{border-color:var(--muted);}
+    .btn-accent{background:var(--accent);color:#0d1117;border-color:var(--accent);font-weight:600;}
+    .btn-accent:hover{opacity:0.85;}
+
+    /* ── Tab bar ── */
+    .tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 20px;}
+    .tab{padding:10px 16px;font-size:13px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all 0.15s;}
+    .tab:hover{color:var(--text);}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:500;}
+
+    /* ── Market mood bar ── */
+    .mood-bar{display:flex;gap:6px;padding:8px 20px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:12px;overflow-x:auto;align-items:center;}
+    .mood-item{display:flex;gap:6px;align-items:center;white-space:nowrap;padding:3px 10px;border-radius:20px;background:var(--surface);}
+    .mood-label{color:var(--muted);font-weight:500;}
+    .mood-bearish{background:rgba(248,81,73,0.12);border:1px solid rgba(248,81,73,0.25);}
+    .mood-bullish{background:rgba(63,185,80,0.10);border:1px solid rgba(63,185,80,0.2);}
+    .mood-tag{font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;}
+    .mood-tag.bear{background:rgba(248,81,73,0.2);color:var(--red);}
+    .mood-tag.bull{background:rgba(63,185,80,0.2);color:var(--green);}
+
+    /* ── Section headers ── */
+    .section{padding:16px 20px 0;}
+    .section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+    .section-title .count{background:var(--surface2);color:var(--muted);font-size:10px;padding:1px 7px;border-radius:10px;font-weight:500;text-transform:none;letter-spacing:0;}
+
+    /* ── Signal cards grid ── */
+    .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;padding:0 20px 16px;}
+
+    /* ── Signal card ── */
+    .sig-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color 0.15s,transform 0.1s;}
+    .sig-card:hover{border-color:var(--accent);transform:translateY(-1px);}
+    .sig-card.buy-card{border-left:3px solid var(--green);}
+    .sig-card.sell-card{border-left:3px solid var(--red);}
+    .sig-card.hold-card{border-left:3px solid var(--border);}
+    .sig-card.strong-buy-card{border-left:3px solid var(--green);background:rgba(63,185,80,0.04);}
+    .sig-card.strong-sell-card{border-left:3px solid var(--red);background:rgba(248,81,73,0.04);}
+
+    .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+    .card-sym{font-size:17px;font-weight:700;display:flex;align-items:center;gap:6px;}
+    .card-price{text-align:right;}
+    .price-main{font-size:17px;font-weight:700;}
+    .price-chg{font-size:12px;font-weight:600;}
+    .price-chg.up{color:var(--green);}
+    .price-chg.down{color:var(--red);}
+
+    /* Badges */
+    .badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:0.03em;}
+    .badge-strong-buy{background:rgba(63,185,80,0.2);color:#56d364;}
+    .badge-buy{background:rgba(63,185,80,0.15);color:var(--green);}
+    .badge-hold{background:rgba(139,148,158,0.15);color:var(--muted);}
+    .badge-sell{background:rgba(248,81,73,0.15);color:var(--red);}
+    .badge-strong-sell{background:rgba(248,81,73,0.2);color:#ff7b72;}
+    .badge-ai-up{background:rgba(88,166,255,0.15);color:var(--accent);font-size:9px;}
+    .badge-ai-down{background:rgba(248,81,73,0.1);color:#f0a500;font-size:9px;}
+
+    .card-why{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;}
+
+    .card-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding-top:10px;border-top:1px solid var(--border);margin-top:4px;}
+    .cs{text-align:center;}
+    .cs label{font-size:9px;color:var(--muted);display:block;margin-bottom:2px;}
+    .cs span{font-size:12px;font-weight:600;}
+    .cs.green span{color:var(--green);}
+    .cs.red span{color:var(--red);}
+    .cs.amber span{color:var(--amber);}
+
+    .card-targets{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+    .target-pill{font-size:11px;padding:3px 8px;border-radius:6px;background:var(--surface2);}
+    .target-pill.t{color:var(--green);}
+    .target-pill.s{color:var(--red);}
+    .target-pill.stop{color:var(--amber);}
+
+    /* ── Best pick ── */
+    .best-card{background:linear-gradient(135deg,rgba(63,185,80,0.08) 0%,rgba(88,166,255,0.06) 100%);border:1px solid rgba(63,185,80,0.3);border-radius:12px;padding:16px 18px;margin:0 20px 16px;cursor:pointer;transition:border-color 0.15s;}
+    .best-card:hover{border-color:var(--green);}
+    .best-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+    .best-sym{font-size:22px;font-weight:800;display:flex;align-items:center;gap:8px;}
+    .best-price{font-size:20px;font-weight:700;text-align:right;}
+    .best-tag{font-size:9px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.1em;}
+    .best-stats{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;}
+    .best-stat{font-size:12px;color:var(--muted);}
+    .best-stat span{color:var(--text);font-weight:600;}
+
+    /* ── Penny picks ── */
+    .penny-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;transition:border-color 0.15s;}
+    .penny-card:hover{border-color:var(--orange);}
+    .penny-top{display:flex;justify-content:space-between;margin-bottom:6px;}
+    .penny-sym{font-size:15px;font-weight:700;}
+    .penny-price{font-size:15px;font-weight:700;}
+    .penny-stats{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;}
+    .ps{text-align:center;}
+    .ps label{font-size:9px;color:var(--muted);display:block;}
+    .ps span{font-size:11px;font-weight:600;}
+
+    /* ── Scanning state ── */
+    .scanning-banner{background:rgba(210,153,34,0.1);border-bottom:1px solid rgba(210,153,34,0.25);color:var(--amber);padding:8px 20px;font-size:12px;display:none;align-items:center;gap:8px;}
+    .spinner{width:12px;height:12px;border:2px solid rgba(210,153,34,0.3);border-top-color:var(--amber);border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Empty / loading states ── */
+    .loading-msg{text-align:center;padding:50px 20px;color:var(--muted);font-size:14px;}
+    .loading-msg .spinner{width:20px;height:20px;border-color:rgba(139,148,158,0.3);border-top-color:var(--muted);margin:0 auto 12px;display:block;}
+
+    /* ── Panel ── */
+    .panel{display:none;}
+    .panel.active{display:block;}
+
+    /* ── Setup wizard ── */
+    #panel-setup{padding:30px 20px;}
+    .wizard{max-width:540px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:26px 28px;}
+    .wizard h2{font-size:18px;font-weight:700;margin-bottom:4px;}
+    .wizard p.sub{font-size:13px;color:var(--muted);margin-bottom:20px;}
+    .wstep{margin-bottom:20px;}
+    .wstep label{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+    .wnum{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#0d1117;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .winput{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:13px;}
+    .winput:focus{outline:none;border-color:var(--accent);}
+    .market-opts{display:flex;gap:8px;}
+    .mopt{flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;text-align:center;}
+    .mopt:hover{border-color:var(--muted);}
+    .mopt.sel{border-color:var(--accent);background:rgba(88,166,255,0.07);}
+    .mopt .flag{font-size:20px;display:block;margin-bottom:4px;}
+    .mopt .mn{font-size:12px;font-weight:600;}
+    .mopt .ms{font-size:10px;color:var(--muted);}
+    .whint{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5;}
+    .whint a{color:var(--accent);}
+    .wactions{display:flex;gap:8px;margin-top:4px;}
+    .wbtn{padding:9px 20px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text);}
+    .wbtn.primary{background:var(--accent);color:#0d1117;border-color:var(--accent);font-weight:600;}
+    .wbtn.primary:hover{opacity:0.85;}
+    .notice{border-radius:8px;padding:10px 14px;font-size:12px;margin-top:12px;display:none;}
+    .notice.ok{background:rgba(63,185,80,0.1);color:var(--green);border:1px solid rgba(63,185,80,0.25);}
+    .notice.err{background:rgba(248,81,73,0.1);color:var(--red);border:1px solid rgba(248,81,73,0.25);}
+    .cron-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:16px;}
+    .cron-box p{font-size:12px;color:var(--muted);margin-bottom:6px;}
+    .cron-box p strong{color:var(--text);}
+    .cron-box code{font-family:monospace;font-size:11px;color:var(--accent);display:block;margin:4px 0;background:rgba(88,166,255,0.06);padding:5px 8px;border-radius:4px;word-break:break-all;}
+  </style>
+</head>
+<body>
+
+<div id="server-warning" style="display:none;background:#2d1b00;border-bottom:1px solid #f0a500;color:#f0a500;padding:10px 20px;font-size:13px;align-items:center;gap:10px;">
+  ⚠️ <strong>Open via server, not as a file.</strong>
+  Run <code style="background:rgba(255,255,255,0.1);padding:2px 5px;border-radius:3px;font-family:monospace;">python3 server.py</code>
+  then visit <a href="http://localhost:8080/dashboard.html" style="color:#f0a500;font-weight:600;">localhost:8080/dashboard.html</a>
+</div>
+
+<div class="scanning-banner" id="scanning-banner">
+  <div class="spinner"></div>
+  Running stock analysis… this takes 3–5 minutes. Live prices and signals will appear automatically.
+</div>
+
+<header>
+  <div class="logo">
+    <div class="live-dot" id="live-dot"></div>
+    McLean Trade Bot
+  </div>
+  <div class="header-right">
+    <div class="scan-info" id="scan-info">Waiting for scan...</div>
+    <button class="btn btn-accent" onclick="triggerScan()" id="scan-btn" title="Re-run full AI signal scan on all stocks">⟳ Scan now</button>
+    <button class="btn" onclick="switchTab('setup')">⚙ Setup</button>
+  </div>
+</header>
+
+<div class="tab-bar">
+  <div class="tab active" id="tab-us"    onclick="switchTab('us')">🇺🇸 US Stocks</div>
+  <div class="tab"        id="tab-india" onclick="switchTab('india')">🇮🇳 Indian Stocks (NSE)</div>
+  <div class="tab"        id="tab-setup" onclick="switchTab('setup')">⚙ Setup</div>
+</div>
+
+<!-- ── US Panel ── -->
+<div class="panel active" id="panel-us">
+  <div class="mood-bar" id="us-mood"></div>
+  <div id="us-content"><div class="loading-msg"><div class="spinner"></div>Running initial scan… check back in a few minutes</div></div>
+</div>
+
+<!-- ── India Panel ── -->
+<div class="panel" id="panel-india">
+  <div class="mood-bar" id="india-mood"></div>
+  <div id="india-content"><div class="loading-msg"><div class="spinner"></div>Running initial scan… check back in a few minutes</div></div>
+</div>
+
+<!-- ── Setup Panel ── -->
+<div class="panel" id="panel-setup">
+  <div class="wizard">
+    <h2>Bot Setup</h2>
+    <p class="sub">Configure Telegram alerts. Changes take effect on next scan.</p>
+
+    <div class="wstep">
+      <label><div class="wnum">1</div> Which market do you trade?</label>
+      <div class="market-opts">
+        <div class="mopt" id="opt-us"    onclick="selMarket('us')"><span class="flag">🇺🇸</span><div class="mn">US Stocks</div><div class="ms">NYSE · NASDAQ</div></div>
+        <div class="mopt" id="opt-india" onclick="selMarket('india')"><span class="flag">🇮🇳</span><div class="mn">India (NSE)</div><div class="ms">NSE · BSE</div></div>
+        <div class="mopt sel" id="opt-both" onclick="selMarket('both')"><span class="flag">🌐</span><div class="mn">Both</div><div class="ms">Separate alerts</div></div>
+      </div>
+    </div>
+
+    <div class="wstep">
+      <label><div class="wnum">2</div> Telegram bot token</label>
+      <input class="winput" id="cfg-token" type="text" placeholder="e.g. 123456789:ABCdef..."/>
+      <div class="whint">Open Telegram → search <strong>@BotFather</strong> → /newbot → copy the token.</div>
+    </div>
+
+    <div class="wstep">
+      <label><div class="wnum">3</div> Your Telegram chat ID</label>
+      <input class="winput" id="cfg-chatid" type="text" placeholder="e.g. 1578063059"/>
+      <div class="whint">Message your bot, then visit api.telegram.org/bot{TOKEN}/getUpdates → find chat.id</div>
+    </div>
+
+    <div class="wactions">
+      <button class="wbtn primary" onclick="saveConfig()">Save &amp; Test</button>
+      <button class="wbtn" onclick="triggerScan()">Force Scan Now</button>
+    </div>
+    <div class="notice ok" id="cfg-ok">✓ Saved! Test message sent to Telegram.</div>
+    <div class="notice err" id="cfg-err"></div>
+
+    <div class="cron-box">
+      <p><strong>Automatic daily alerts</strong> — open Terminal, run <code>crontab -e</code> and add:</p>
+      <p>🇺🇸 US alerts (7 AM ET):</p>
+      <code>0 12 * * 1-5 cd "/Users/aravind/Documents/Claude/Projects/Trading view" && python3 telegram_alert.py >> tradealerts.log 2>&1</code>
+      <p style="margin-top:8px">🇮🇳 India alerts (8:45 AM IST):</p>
+      <code>15 3 * * 1-5 cd "/Users/aravind/Documents/Claude/Projects/Trading view" && python3 india_alert.py >> india_alerts.log 2>&1</code>
+    </div>
+
+    <div class="cron-box" style="margin-top:12px;">
+      <p><strong>Share with friends</strong></p>
+      <code>git clone https://github.com/aravindramesh2806/Trade-Texter.git</code>
+      <code>cd Trade-Texter && pip3 install yfinance pandas numpy --break-system-packages && python3 server.py</code>
+      <p style="margin-top:6px;">Then open Setup tab, paste their own Telegram token + chat ID.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────
+let activeTab   = 'us';
+let lastData    = { us: null, india: null };
+let pollTimer   = null;
+let countdown   = 0;
+let setupMarket = 'both';
+
+const CHART_US    = sym => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(sym)}`;
+const CHART_INDIA = sym => `https://www.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(sym)}`;
+
+// ── Boot ──────────────────────────────────────────────────────────
+if (location.protocol === 'file:') {
+  document.getElementById('server-warning').style.display = 'flex';
+}
+loadConfig();
+fetchSignals('us');
+fetchSignals('india');
+// Poll every 10s during scan, every 60s once settled
+function schedulePoll() {
+  const scanning = lastData.us?.scanning || lastData.india?.scanning ||
+                   !lastData.us?.last_updated || !lastData.india?.last_updated;
+  const interval = scanning ? 10000 : 60000;
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    await fetchSignals('us');
+    await fetchSignals('india');
+    countdown = Math.max(0, countdown - (scanning ? 10 : 60));
+    updateScanInfo();
+    schedulePoll();
+  }, interval);
+}
+schedulePoll();
+
+// ── Tab switching ─────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  ['us','india','setup'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+    document.getElementById('panel-'+t).classList.toggle('active', t === tab);
+  });
+}
+
+// ── Fetch signals from server ─────────────────────────────────────
+async function fetchSignals(market) {
+  try {
+    const resp = await fetch(`/api/signals?market=${market}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    const prev = lastData[market];
+    lastData[market] = data;
+
+    // Show scanning banner if either market is scanning
+    const anyScanning = (lastData.us?.scanning || lastData.india?.scanning);
+    document.getElementById('scanning-banner').style.display = anyScanning ? 'flex' : 'none';
+    document.getElementById('live-dot').className = anyScanning ? 'live-dot scanning-dot' : 'live-dot';
+
+    // Update mood bar
+    renderMoodBar(market, data);
+
+    // Only re-render cards if data actually changed
+    if (data.last_updated && data.last_updated !== prev?.last_updated) {
+      renderContent(market, data);
+      if (data.last_updated) {
+        const t = new Date(data.last_updated);
+        countdown = 30 * 60;
+        updateScanInfo(t);
+      }
+    } else if (!data.last_updated && !prev) {
+      // Still waiting for first scan — keep spinner
+    }
+  } catch(e) {
+    // Suppress fetch errors on localhost — server just isn't ready yet
+  }
+}
+
+function updateScanInfo(lastTime) {
+  const el = document.getElementById('scan-info');
+  if (!lastTime && lastData[activeTab]?.last_updated) {
+    lastTime = new Date(lastData[activeTab].last_updated);
+  }
+  if (!lastTime) { el.textContent = 'Waiting for first scan…'; return; }
+  const ago = Math.round((Date.now() - lastTime.getTime()) / 60000);
+  const next = Math.max(0, Math.round(countdown / 60));
+  el.innerHTML = `Last scan: <span>${ago < 1 ? 'just now' : ago + 'm ago'}</span> · Next in <span>${next}m</span>`;
+}
+
+// ── Render mood bar ───────────────────────────────────────────────
+function renderMoodBar(market, data) {
+  const el  = document.getElementById(market + '-mood');
+  const pct = market === 'us' ? data.spy_pct : data.nifty_pct;
+  const bear = data.market_bearish;
+  const proxy = market === 'us' ? 'SPY' : 'NIFTY';
+
+  if (pct == null) { el.innerHTML = `<span style="color:var(--muted);font-size:12px">Loading market data...</span>`; return; }
+
+  const dir  = pct >= 0 ? '+' : '';
+  const cls  = bear ? 'mood-bearish' : 'mood-bullish';
+  const tag  = bear ? `<span class="mood-tag bear">BEARISH — BUY suppressed</span>` : `<span class="mood-tag bull">Bullish</span>`;
+  el.innerHTML = `<div class="mood-item ${cls}"><span class="mood-label">${proxy}</span><span style="color:${pct>=0?'var(--green)':'var(--red)'};font-weight:600">${dir}${pct}%</span>${tag}</div>
+    <span style="color:var(--muted);font-size:11px;margin-left:8px">${bear ? '⚠️ Market is down — BUY signals suppressed today' : '✓ Market healthy'}</span>`;
+}
+
+// ── Main content renderer ─────────────────────────────────────────
+function renderContent(market, data) {
+  const el    = document.getElementById(market + '-content');
+  const india = market === 'india';
+  const sigs  = data.signals || [];
+  const penny = data.penny_picks || [];
+  const watch = data.watchlist_picks || [];
+
+  if (!sigs.length && !data.scanning) {
+    el.innerHTML = `<div class="loading-msg">No signals yet — scan in progress or market closed.</div>`;
+    return;
+  }
+
+  const buys  = sigs.filter(s => s.label.includes('BUY'));
+  const sells = sigs.filter(s => s.label.includes('SELL'));
+  const holds = sigs.filter(s => s.label === 'HOLD');
+
+  // Best pick
+  const best = buys.reduce((a,b) => b.score > (a?.score||0) ? b : a, null);
+
+  let html = '';
+
+  // ── Best pick ──
+  if (best) {
+    html += `
+    <div class="section"><div class="section-title">⭐ Best pick today</div></div>
+    <div style="padding:0 20px 16px;">
+      <div class="best-card" onclick="openChart('${best.symbol}', ${india})">
+        <div class="best-header">
+          <div>
+            <div class="best-tag">Best opportunity</div>
+            <div class="best-sym">${best.symbol} ${badge(best.label)} ${aiBadge(best.ai_signal)}</div>
+          </div>
+          <div class="best-price">
+            ${price(best.price, india)}
+            <div class="price-chg ${best.pct>=0?'up':'down'}">${best.pct>=0?'▲':'▼'} ${Math.abs(best.pct).toFixed(2)}%</div>
+          </div>
+        </div>
+        <div class="card-why">${best.why}</div>
+        <div class="best-stats">
+          <div class="best-stat">Target <span>${price(best.resistance, india)} (+${best.profit_pct}%)</span></div>
+          <div class="best-stat">Stop loss <span>${price(best.stop_loss, india)}</span></div>
+          <div class="best-stat">RSI <span>${best.rsi}</span></div>
+          <div class="best-stat">Score <span>${best.score}/7</span></div>
+          ${best.vol_ratio ? `<div class="best-stat">Volume <span>${best.vol_ratio}x avg</span></div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── BUY signals ──
+  if (buys.length) {
+    html += `<div class="section"><div class="section-title">🟢 Buy signals <span class="count">${buys.length}</span></div></div>
+    <div class="cards-grid">${buys.map(s => sigCard(s, india)).join('')}</div>`;
+  }
+
+  // ── SELL signals ──
+  if (sells.length) {
+    html += `<div class="section"><div class="section-title">🔴 Sell signals <span class="count">${sells.length}</span></div></div>
+    <div class="cards-grid">${sells.map(s => sigCard(s, india)).join('')}</div>`;
+  }
+
+  // ── HOLD ──
+  if (holds.length) {
+    html += `<div class="section"><div class="section-title">⚪ Hold — no action needed <span class="count">${holds.length}</span></div></div>
+    <div class="cards-grid">${holds.map(s => sigCard(s, india)).join('')}</div>`;
+  }
+
+  // ── Watchlist picks ──
+  if (watch.length) {
+    html += `<div class="section"><div class="section-title">👀 Stocks to watch — not in portfolio <span class="count">${watch.length}</span></div></div>
+    <div class="cards-grid">${watch.map(s => sigCard(s, india, true)).join('')}</div>`;
+  }
+
+  // ── Penny picks (US only) ──
+  if (penny.length && !india) {
+    html += `<div class="section"><div class="section-title">⚡ Penny stock picks <span class="count">${penny.length}</span> <span style="color:var(--orange);font-size:10px;font-weight:400">Small size only — high risk</span></div></div>
+    <div class="cards-grid">${penny.map(p => pennyCard(p)).join('')}</div>`;
+  }
+
+  html += `<div style="height:24px;"></div>`;
+  el.innerHTML = html;
+}
+
+// ── Card builders ─────────────────────────────────────────────────
+function sigCard(s, india, isWatch=false) {
+  const labelClass = s.label.replace(' ','-').toLowerCase();
+  const isBuy  = s.label.includes('BUY');
+  const isSell = s.label.includes('SELL');
+  return `
+  <div class="sig-card ${labelClass}-card" onclick="openChart('${s.symbol}', ${india})">
+    <div class="card-top">
+      <div class="card-sym">${s.symbol} ${badge(s.label)} ${aiBadge(s.ai_signal)}</div>
+      <div class="card-price">
+        <div class="price-main">${price(s.price, india)}</div>
+        <div class="price-chg ${s.pct>=0?'up':'down'}">${s.pct>=0?'▲':'▼'} ${Math.abs(s.pct).toFixed(2)}%</div>
+      </div>
+    </div>
+    <div class="card-why">${s.why}</div>
+    ${isBuy ? `<div class="card-targets">
+      <span class="target-pill t">Target ${price(s.resistance,india)} (+${s.profit_pct}%)</span>
+      <span class="target-pill stop">Stop ${price(s.stop_loss,india)}</span>
+    </div>` : ''}
+    ${isSell ? `<div class="card-targets">
+      <span class="target-pill s">Sell near ${price(s.resistance,india)}</span>
+      <span class="target-pill stop">Protect ${price(s.stop_loss,india)}</span>
+    </div>` : ''}
+    <div class="card-stats">
+      <div class="cs ${s.rsi<35?'green':s.rsi>70?'red':''}"><label>RSI</label><span>${s.rsi}</span></div>
+      <div class="cs ${s.score>=2?'green':s.score<=-2?'red':''}"><label>Score</label><span>${s.score}/7</span></div>
+      <div class="cs ${s.vol_ratio>=1.5?'green':s.vol_ratio<0.5?'amber':''}"><label>Volume</label><span>${s.vol_ratio ? s.vol_ratio+'x' : '—'}</span></div>
+    </div>
+  </div>`;
+}
+
+function pennyCard(p) {
+  return `
+  <div class="penny-card" onclick="openChart('${p.symbol}', false)">
+    <div class="penny-top">
+      <div class="penny-sym">${p.symbol}</div>
+      <div class="penny-price">$${p.price}</div>
+    </div>
+    <div class="penny-stats">
+      <div class="ps"><label>Day</label><span style="color:${p.pct>=0?'var(--green)':'var(--red)'}">${p.pct>=0?'+':''}${p.pct}%</span></div>
+      <div class="ps"><label>Week</label><span style="color:${p.week_pct>=0?'var(--green)':'var(--red)'}">${p.week_pct>=0?'+':''}${p.week_pct}%</span></div>
+      <div class="ps"><label>Volume</label><span style="color:var(--orange)">${p.vol_ratio}x</span></div>
+      <div class="ps"><label>RSI</label><span>${p.rsi}</span></div>
+    </div>
+  </div>`;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
+function price(val, india) {
+  if (!val) return '—';
+  if (india) {
+    if (val >= 1e7) return '₹' + (val/1e7).toFixed(2) + 'Cr';
+    if (val >= 1e5) return '₹' + (val/1e5).toFixed(2) + 'L';
+    return '₹' + val.toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+  return '$' + val.toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function badge(label) {
+  const cls = {
+    'STRONG BUY':  'badge-strong-buy',
+    'BUY':         'badge-buy',
+    'HOLD':        'badge-hold',
+    'SELL':        'badge-sell',
+    'STRONG SELL': 'badge-strong-sell',
+  }[label] || 'badge-hold';
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function aiBadge(ai) {
+  if (ai === 1)  return `<span class="badge badge-ai-up">AI ↑</span>`;
+  if (ai === -1) return `<span class="badge badge-ai-down">AI ↓</span>`;
+  return '';
+}
+
+function openChart(sym, india) {
+  const url = india ? CHART_INDIA(sym) : CHART_US(sym);
+  window.open(url, '_blank');
+}
+
+// ── Manual scan trigger ───────────────────────────────────────────
+async function triggerScan() {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.textContent = '⟳ Scanning…';
+  try {
+    await fetch('/api/scan?market=both');
+    document.getElementById('scanning-banner').style.display = 'flex';
+    document.getElementById('live-dot').className = 'live-dot scanning-dot';
+    document.getElementById('scan-info').textContent = 'Scan running — takes 3–5 min…';
+    // Re-enable after 10s so user can see progress updates
+    setTimeout(() => { btn.disabled = false; btn.textContent = '⟳ Scan now'; }, 10000);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '⟳ Scan now';
+    document.getElementById('scan-info').textContent = 'Server not running — restart server.py';
+  }
+}
+
+// ── Setup wizard ──────────────────────────────────────────────────
+function selMarket(m) {
+  setupMarket = m;
+  ['us','india','both'].forEach(x => document.getElementById('opt-'+x).classList.toggle('sel', x === m));
+}
+
+async function saveConfig() {
+  const token  = document.getElementById('cfg-token').value.trim();
+  const chatid = document.getElementById('cfg-chatid').value.trim();
+  const ok  = document.getElementById('cfg-ok');
+  const err = document.getElementById('cfg-err');
+  ok.style.display = 'none'; err.style.display = 'none';
+  if (!token || !chatid) { err.textContent = 'Fill in both fields.'; err.style.display = 'block'; return; }
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({telegram_token: token, telegram_chat_id: chatid, market: setupMarket}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      ok.style.display = 'block';
+      await fetch('/api/notify-test');
+    } else { err.textContent = 'Save failed: ' + (d.error||'unknown'); err.style.display = 'block'; }
+  } catch(e) { err.textContent = 'Cannot reach server: ' + e.message; err.style.display = 'block'; }
+}
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/config');
+    const d = await r.json();
+    if (d.telegram_token)   document.getElementById('cfg-token').value  = d.telegram_token;
+    if (d.telegram_chat_id) document.getElementById('cfg-chatid').value = d.telegram_chat_id;
+    if (d.market) selMarket(d.market);
+  } catch(e) {}
+}
+</script>
+</body>
+</html>

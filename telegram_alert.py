@@ -21,8 +21,8 @@ import urllib.request, urllib.parse, sys, os, time, logging
 from datetime import datetime, timedelta
 
 # ── Config ────────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = "YOUR_BOT_TOKEN_HERE"
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"
+TELEGRAM_TOKEN   = "8955387419:AAHEmmHoibcYkv2MRcFElzX__4TOrP55PjQ"
+TELEGRAM_CHAT_ID = "1578063059"
 PORTFOLIO        = ["AAPL", "GOOGL", "PLTR", "VOO", "NVDA", "AMD", "AMZN", "CRM"]
 
 WATCHLIST = [
