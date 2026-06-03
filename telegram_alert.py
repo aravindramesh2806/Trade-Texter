@@ -21,12 +21,12 @@ import urllib.request, urllib.parse, sys, os, time, logging
 from datetime import datetime, timedelta
 
 # ── Config ────────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = "YOUR_BOT_TOKEN_HERE"  # Get from @BotFather on Telegram
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"    # Send /start to your bot, then visit: https://api.telegram.org/bot<TOKEN>/getUpdates
+TELEGRAM_TOKEN   = "YOUR_BOT_TOKEN_HERE"
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"
 PORTFOLIO        = ["AAPL", "GOOGL", "PLTR", "VOO", "NVDA", "AMD", "AMZN", "CRM"]
 
 WATCHLIST = [
-    "META","MSFT","NFLX","TSLA","UBER","SHOP","SQ","SNOW","COIN","DDOG",
+    "META","MSFT","NFLX","TSLA","UBER","SHOP","XYZ","SNOW","COIN","DDOG",
     "AVGO","QCOM","MU","INTC","SMCI","ARM","TSM","AMAT","LRCX","KLAC",
     "JPM","GS","V","MA","BAC","MS","BLK","SCHW","AXP","COF",
     "UNH","LLY","JNJ","ABBV","MRK","PFE","AMGN","GILD","REGN","VRTX",
@@ -36,12 +36,18 @@ WATCHLIST = [
 TOP_WATCHLIST = 3
 
 PENNY_WATCHLIST = [
-    "SAVA","ACST","ATOS","NKTR","CRBP","OCGN","TNXP","AGTC","IMVT","ACNB",
-    "IDEX","MOXC","ILUS","CODA","SHOT","PEGY","GFAI","AGFY","SSYS","CLOV",
-    "UAMY","USAS","SILV","AUMN","GPL","EXK","AG","MUX","PAAS","FSM",
-    "TLRY","CGC","SNDL","ACB","CRLBF","CURLF","GTBIF","TCNNF","AYRWF","VRNOF",
-    "BBBY","EXPR","NAKD","KOSS","WISH","XELA","IDAI","NTRB","MULN","FFIE",
-    "MARA","RIOT","HIVE","HUT","BTBT","CAN","EBON","CIFR","WULF","CLSK",
+    # Biotech / speculative
+    "OCGN","NKTR","IMVT","CLOV","SSYS","ACNB","ATOS","CRBP","TNXP","APDN",
+    # Mining / metals
+    "EXK","AG","MUX","PAAS","FSM","AUMN","UAMY","USAS","GPL","EXK",
+    # Cannabis
+    "TLRY","CGC","SNDL","ACB","CRLBF","CURLF","GTBIF","TCNNF","AYRWF","NEPT",
+    # Crypto miners
+    "MARA","RIOT","HIVE","HUT","BTBT","CIFR","WULF","CLSK","IREN","BITF",
+    # High-vol momentum
+    "GFAI","SHOT","ILUS","CODA","GFAI","IDAI","NTRB","XELA","KOSS","BBAI",
+    # Small cap tech
+    "SSYS","CLOV","ACNB","APDN","BBAI","NRXP","ELEV","PRST","NKLA","GOEV",
 ]
 TOP_PENNIES = 4
 
@@ -157,6 +163,47 @@ def calc_macd(series):
     m = safe_float(macd.iloc[-1])
     s = safe_float(signal.iloc[-1])
     return m, s
+
+def calc_ai_trend(close, lookback=30, forecast_days=5) -> int:
+    """
+    Lightweight AI trend predictor — linear regression + momentum.
+    Uses only yfinance data already in memory. Zero extra dependencies.
+
+    Combines two signals:
+      1. Linear regression slope over `lookback` days (normalised)
+      2. Short-term momentum: (close[-1] / close[-forecast_days]) - 1
+
+    Returns:
+      +1  if trend + momentum both point up
+      -1  if trend + momentum both point down
+       0  if signals conflict or data insufficient
+    """
+    try:
+        if len(close) < lookback + forecast_days:
+            return 0
+
+        prices = np.array(close.tail(lookback), dtype=float)
+        if not np.all(np.isfinite(prices)):
+            return 0
+
+        # Linear regression slope (normalised by mean price)
+        x    = np.arange(lookback)
+        xm   = x - x.mean()
+        slope = (xm @ prices) / (xm @ xm)          # OLS slope
+        slope_pct = slope / prices.mean() * 100     # as % per day
+
+        # Short-term momentum: return over last forecast_days bars
+        momentum_pct = (prices[-1] / prices[-forecast_days] - 1) * 100
+
+        if slope_pct > 0.05 and momentum_pct > 0:
+            return 1
+        elif slope_pct < -0.05 and momentum_pct < 0:
+            return -1
+        else:
+            return 0
+    except Exception:
+        return 0
+
 
 def calc_atr(hist, period=14):
     """
@@ -313,6 +360,13 @@ def get_signal(sym):
             elif vol_ratio < 0.5:
                 score -= 1; reasons.append(f"volume {vol_ratio:.1f}x — very thin, low conviction")
 
+        # AI trend signal — linear regression + momentum forecast
+        ai_signal = calc_ai_trend(close)
+        if ai_signal == 1:
+            score += 1; reasons.append("AI trend: upward forecast")
+        elif ai_signal == -1:
+            score -= 1; reasons.append("AI trend: downward forecast")
+
         # ── Label ─────────────────────────────────────────────────
         if   score >= 4:  label = "STRONG BUY"
         elif score >= 2:  label = "BUY"
@@ -335,6 +389,8 @@ def get_signal(sym):
                 why_parts.append("above 50-day MA — uptrend intact")
             if pct < -2:
                 why_parts.append(f"dipped {pct:.1f}% today — possible overreaction")
+            if ai_signal == 1:
+                why_parts.append("AI trend confirms upward momentum")
         elif "SELL" in label:
             if rsi > 70:
                 why_parts.append(f"RSI {rsi:.0f} — overbought, pullback likely")
@@ -342,6 +398,8 @@ def get_signal(sym):
                 why_parts.append(f"hitting resistance ${resistance:.2f}")
             if pct > 5:
                 why_parts.append(f"up {pct:.1f}% today — good time to lock in gains")
+            if ai_signal == -1:
+                why_parts.append("AI trend confirms downward pressure")
         else:
             why_parts = reasons[:2]
 
@@ -369,6 +427,7 @@ def get_signal(sym):
             "stop_loss":  stop_loss,
             "atr":        round(atr, 2) if atr else None,
             "vol_ratio":  round(vol_ratio, 1) if vol_ratio else None,
+            "ai_signal":  ai_signal,
         }
 
     except Exception as e:
@@ -618,7 +677,46 @@ if __name__ == "__main__":
     penny_picks = scan_penny_stocks()
     log.info(f"Penny picks: {[p['symbol'] for p in penny_picks]}")
 
-    # ── Build and send ────────────────────────────────────────────
+    # ── Standalone BUY alert ──────────────────────────────────────
+    buys = [s for s in signals if "BUY" in s.get("label", "")]
+    if buys:
+        buy_lines = ["BUY ALERT — Opportunity Now", ""]
+        for s in buys:
+            day_chg    = f'+{s["pct"]}%' if s["pct"] >= 0 else f'{s["pct"]}%'
+            profit_pct = round((s["resistance"] - s["price"]) / s["price"] * 100, 1)
+            buy_lines += [
+                f'<b>{s["symbol"]}</b>  ${s["price"]}  ({day_chg})  <b>{s["label"]}</b>',
+                f'  {s["why"]}',
+                f'  Target: ${s["resistance"]}  (+{profit_pct}%)',
+                f'  Stop:   ${s["stop_loss"]}',
+                "",
+            ]
+        buy_lines.append("<i>McLean Trade Bot · Not financial advice</i>")
+        buy_msg = "\n".join(buy_lines)
+        log.info(f"Sending BUY alert for: {[s['symbol'] for s in buys]}")
+        send_telegram(buy_msg)
+        time.sleep(1)
+
+    # ── Standalone SELL alert ─────────────────────────────────────
+    sells = [s for s in signals if "SELL" in s.get("label", "")]
+    if sells:
+        sell_lines = ["SELL ALERT — Act Now", ""]
+        for s in sells:
+            day_chg = f'+{s["pct"]}%' if s["pct"] >= 0 else f'{s["pct"]}%'
+            sell_lines += [
+                f'<b>{s["symbol"]}</b>  ${s["price"]}  ({day_chg})  <b>{s["label"]}</b>',
+                f'  {s["why"]}',
+                f'  Sell near: ${s["resistance"]}',
+                f'  Protect gains — stop at: ${s["stop_loss"]}',
+                "",
+            ]
+        sell_lines.append("<i>McLean Trade Bot · Not financial advice</i>")
+        sell_msg = "\n".join(sell_lines)
+        log.info(f"Sending SELL alert for: {[s['symbol'] for s in sells]}")
+        send_telegram(sell_msg)
+        time.sleep(1)
+
+    # ── Build and send main report ────────────────────────────────
     message = build_message(signals, penny_picks, watchlist_picks, spy_pct, market_bearish)
     log.info("Message built. Sending to Telegram...")
     print(message)

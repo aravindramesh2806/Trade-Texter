@@ -29,8 +29,8 @@ logging.basicConfig(
 log = logging.getLogger("intraday")
 
 # ── Config ───────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = "YOUR_BOT_TOKEN_HERE"  # Get from @BotFather on Telegram
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"    # Send /start to your bot, then visit: https://api.telegram.org/bot<TOKEN>/getUpdates
+TELEGRAM_TOKEN   = "YOUR_BOT_TOKEN_HERE"
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"
 PORTFOLIO        = ["AAPL", "GOOGL", "PLTR", "VOO", "NVDA", "AMD", "AMZN", "CRM"]
 
 RSI_OVERSOLD   = 35
@@ -304,7 +304,7 @@ def build_change_message(label_changes, new_events, now_str):
         lines.append("")
         lines.append("<b>── SIGNAL CHANGES ───────────────</b>")
         for sym, old_lbl, new_lbl, price in label_changes:
-            day_indicator = "  <-- BUY" if "BUY" in new_lbl else ("  <-- SELL" if "SELL" in new_lbl else "")
+            day_indicator = "  <-- BUY" if "BUY" in new_lbl else ("  <-- SELL NOW" if "SELL" in new_lbl else "")
             lines.append(f'<b>{sym}</b>  ${price}   {old_lbl} -> <b>{new_lbl}</b>{day_indicator}')
 
     if new_events:
@@ -319,6 +319,59 @@ def build_change_message(label_changes, new_events, now_str):
     lines.append("")
     lines.append("<i>McLean Trade Bot · Not financial advice</i>")
     return "\n".join(lines)
+
+def build_standalone_alerts(label_changes, new_events, now_str):
+    """
+    Returns (buy_msg, sell_msg) — standalone notifications sent before the main update.
+    Either can be None if no relevant signals.
+    """
+    buy_changes  = [(sym, old, new, price) for sym, old, new, price in label_changes if "BUY" in new]
+    sell_changes = [(sym, old, new, price) for sym, old, new, price in label_changes if "SELL" in new]
+
+    buy_events  = [e for e in new_events if e["type"] in ("BOUNCE SETUP", "RSI OVERSOLD", "MOMENTUM BREAKOUT", "RESISTANCE BREAKOUT")]
+    sell_events = [e for e in new_events if e["type"] == "TAKE PROFIT"]
+
+    # ── BUY alert ────────────────────────────────────────────────
+    buy_msg = None
+    if buy_changes or buy_events:
+        lines = ["BUY ALERT — Opportunity Now", ""]
+        for sym, old_lbl, new_lbl, price in buy_changes:
+            lines += [
+                f'<b>{sym}  ${price}</b>  {old_lbl} -> <b>{new_lbl}</b>',
+                f'  Signal flipped to BUY — entry opportunity now.',
+                "",
+            ]
+        for e in buy_events:
+            lines += [
+                f'<b>{e["sym"]}  ${e["price"]}</b> — {e["type"]}',
+                f'  {e["detail"]}',
+                f'  Action: <b>{e["action"]}</b>',
+                "",
+            ]
+        lines.append("<i>McLean Trade Bot · Not financial advice</i>")
+        buy_msg = "\n".join(lines)
+
+    # ── SELL alert ────────────────────────────────────────────────
+    sell_msg = None
+    if sell_changes or sell_events:
+        lines = ["SELL ALERT — Act Now", ""]
+        for sym, old_lbl, new_lbl, price in sell_changes:
+            lines += [
+                f'<b>{sym}  ${price}</b>  {old_lbl} -> <b>{new_lbl}</b>',
+                f'  Signal flipped to SELL — consider taking profit now.',
+                "",
+            ]
+        for e in sell_events:
+            lines += [
+                f'<b>{e["sym"]}  ${e["price"]}</b> — {e["type"]}',
+                f'  {e["detail"]}',
+                f'  Action: <b>{e["action"]}</b>',
+                "",
+            ]
+        lines.append("<i>McLean Trade Bot · Not financial advice</i>")
+        sell_msg = "\n".join(lines)
+
+    return buy_msg, sell_msg
 
 
 # ── Main ──────────────────────────────────────────────────────────
@@ -382,6 +435,18 @@ if __name__ == "__main__":
     save_state(state)
 
     if label_changes or new_events:
+        # Send standalone BUY / SELL alerts first — arrive as separate notifications
+        buy_msg, sell_msg = build_standalone_alerts(label_changes, new_events, now_str)
+        if buy_msg:
+            log.info("Sending standalone BUY alert...")
+            send_telegram(buy_msg)
+            time.sleep(1)
+        if sell_msg:
+            log.info("Sending standalone SELL alert...")
+            send_telegram(sell_msg)
+            time.sleep(1)
+
+        # Then send the full change summary
         msg = build_change_message(label_changes, new_events, now_str)
         log.info(f"Sending update: {len(label_changes)} changes, {len(new_events)} events")
         print(msg)

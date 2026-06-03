@@ -19,8 +19,8 @@ except ImportError:
 DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ── Telegram config ──────────────────────────────────────────────
-TELEGRAM_TOKEN   = "YOUR_BOT_TOKEN_HERE"  # Get from @BotFather on Telegram
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"    # Send /start to your bot, then visit: https://api.telegram.org/bot<TOKEN>/getUpdates
+TELEGRAM_TOKEN   = "YOUR_BOT_TOKEN_HERE"
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"
 
 def send_telegram(message: str, parse_mode: str = "HTML") -> bool:
     """Send a Telegram message. Returns True on success."""
