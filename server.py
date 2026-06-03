@@ -4,11 +4,13 @@ McLean Trade Bot — Dashboard Server
 Run:  python3 server.py
 Open: http://localhost:8080/dashboard.html
 """
-import json, os, sys, time, threading, logging, urllib.request, urllib.parse
+import json, os, sys, time, threading, logging, urllib.request, urllib.parse, warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ── Install deps ──────────────────────────────────────────────────
 for pkg in ["yfinance", "pandas", "numpy"]:
