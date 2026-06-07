@@ -626,7 +626,8 @@ def enrich_signal(s):
     }
 
 
-def build_message(signals, penny_picks, watchlist_picks=None, spy_pct=None, market_bearish=False):
+def build_message(signals, penny_picks=None, watchlist_picks=None, spy_pct=None, market_bearish=False):
+    penny_picks = penny_picks or []
     now   = datetime.now().strftime("%a, %b %-d %Y")
     signals = [enrich_signal(s) for s in signals]
     if watchlist_picks:
@@ -735,15 +736,17 @@ def build_message(signals, penny_picks, watchlist_picks=None, spy_pct=None, mark
     return "\n".join(lines)
 
 
-# ── Main ──────────────────────────────────────────────────────────
+# ── Fetch ─────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
-    if not TELEGRAM_TOKEN:
-        log.warning("No Telegram token in env or config.json — exiting cleanly without sending alerts.")
-        sys.exit(0)
+def fetch_signals():
+    """
+    Run the full market scan and return all the data needed to build a report.
+    Returns a dict with keys: signals, watchlist_picks, penny_picks,
+    spy_pct, market_bearish.
 
-    log.info("=== McLean Trade Bot starting ===")
-
+    This is the shared data-gathering step used by both the daily alert
+    (main()) and the on-demand /scan bot command.
+    """
     # ── Market mood check ─────────────────────────────────────────
     spy_pct, market_bearish = get_market_mood()
 
@@ -763,10 +766,6 @@ if __name__ == "__main__":
         else:
             log.warning(f"  {sym}: no valid signal")
 
-    if not signals:
-        log.error("No valid signals from portfolio — aborting alert.")
-        sys.exit(1)
-
     # ── Watchlist + penny scans ───────────────────────────────────
     watchlist_picks = scan_watchlist()
     # Suppress watchlist BUY picks on bearish days too
@@ -776,6 +775,35 @@ if __name__ == "__main__":
 
     penny_picks = scan_penny_stocks()
     log.info(f"Penny picks: {[p['symbol'] for p in penny_picks]}")
+
+    return {
+        "signals":         signals,
+        "watchlist_picks": watchlist_picks,
+        "penny_picks":     penny_picks,
+        "spy_pct":         spy_pct,
+        "market_bearish":  market_bearish,
+    }
+
+
+# ── Main ──────────────────────────────────────────────────────────
+
+def main():
+    if not TELEGRAM_TOKEN:
+        log.warning("No Telegram token in env or config.json — exiting cleanly without sending alerts.")
+        sys.exit(0)
+
+    log.info("=== McLean Trade Bot starting ===")
+
+    data = fetch_signals()
+    signals         = data["signals"]
+    watchlist_picks = data["watchlist_picks"]
+    penny_picks     = data["penny_picks"]
+    spy_pct         = data["spy_pct"]
+    market_bearish  = data["market_bearish"]
+
+    if not signals:
+        log.error("No valid signals from portfolio — aborting alert.")
+        sys.exit(1)
 
     # ── Standalone BUY alert ──────────────────────────────────────
     buys = [s for s in signals if "BUY" in s.get("label", "")]
@@ -827,3 +855,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     log.info("=== McLean Trade Bot done ===")
+
+
+if __name__ == "__main__":
+    main()
