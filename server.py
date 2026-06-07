@@ -57,7 +57,11 @@ FALLBACK_CHAT_ID = "1578063059"
 
 def get_creds():
     cfg = read_config()
-    return cfg.get("telegram_token", FALLBACK_TOKEN), cfg.get("telegram_chat_id", FALLBACK_CHAT_ID)
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN")
+             or cfg.get("TELEGRAM_BOT_TOKEN") or cfg.get("telegram_token") or FALLBACK_TOKEN)
+    chat_id = (os.environ.get("TELEGRAM_CHAT_ID")
+               or cfg.get("TELEGRAM_CHAT_ID") or cfg.get("telegram_chat_id") or FALLBACK_CHAT_ID)
+    return token, chat_id
 
 def send_telegram(msg):
     token, chat_id = get_creds()

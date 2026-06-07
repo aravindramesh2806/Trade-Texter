@@ -29,8 +29,31 @@ logging.basicConfig(
 log = logging.getLogger("intraday")
 
 # ── Config ───────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "YOUR_CHAT_ID_HERE")
+_CFG_FILE = os.path.join(DIR, "config.json")
+
+def _load_config():
+    if os.path.exists(_CFG_FILE):
+        try:
+            return json.load(open(_CFG_FILE))
+        except Exception:
+            pass
+    return {}
+
+def _cred(env_key, *cfg_keys, default=""):
+    """Prefer the env var, then config.json (accepts both key styles), then default."""
+    val = os.environ.get(env_key)
+    if val:
+        return val
+    cfg = _load_config()
+    for k in cfg_keys:
+        if cfg.get(k):
+            return cfg[k]
+    return default
+
+TELEGRAM_TOKEN   = _cred("TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_TOKEN", "telegram_token",
+                         default="YOUR_BOT_TOKEN_HERE")
+TELEGRAM_CHAT_ID = _cred("TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID", "telegram_chat_id",
+                         default="YOUR_CHAT_ID_HERE")
 PORTFOLIO        = ["AAPL", "GOOGL", "PLTR", "VOO", "NVDA", "AMD", "AMZN", "CRM"]
 
 # Alert only when signal type changes OR confidence shifts by more than this.
@@ -488,8 +511,8 @@ def build_standalone_alerts(label_changes, new_events, now_str):
 # ── Main ──────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    if not os.environ.get("TELEGRAM_BOT_TOKEN"):
-        log.warning("TELEGRAM_BOT_TOKEN environment variable not set — exiting cleanly without sending alerts.")
+    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == "YOUR_BOT_TOKEN_HERE":
+        log.warning("No Telegram token in env or config.json — exiting cleanly without sending alerts.")
         sys.exit(0)
 
     if not is_market_hours():

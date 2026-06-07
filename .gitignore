@@ -15,4 +15,8 @@ __pycache__/
 .DS_Store
 
 # Sensitive — never commit credentials
-# (tokens are in the scripts — rotate them after pushing)
+config.json
+.env
+
+# LaunchAgents (may embed tokens / local paths)
+*.plist
