@@ -515,9 +515,12 @@ def run_india_scan():
 
 def background_loop():
     while True:
-        run_us_scan()
-        run_india_scan()
-        log.info("Both scans done. Sleeping 30 min...")
+        try:
+            run_us_scan()
+            run_india_scan()
+            log.info("Both scans done. Sleeping 30 min...")
+        except Exception as e:
+            log.error(f"Scan cycle crashed, server stays up: {e}", exc_info=True)
         time.sleep(30*60)
 
 # ── Live quote fetcher (for price cards) ─────────────────────────

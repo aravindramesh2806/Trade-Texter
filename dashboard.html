@@ -443,7 +443,7 @@ schedulePoll();
 function schedulePoll() {
   clearTimeout(pollTimer);
   const scanning = lastData.us?.scanning || lastData.india?.scanning
-                || !lastData.us?.last_updated || !lastData.india?.last_updated;
+                || !lastData.us?.last_updated;
   pollTimer = setTimeout(async () => {
     await fetchAll();
     schedulePoll();
@@ -479,7 +479,8 @@ async function fetchSignals(market) {
 function updateHeader() {
   const usData    = lastData.us;
   const inData    = lastData.india;
-  const scanning  = usData?.scanning || inData?.scanning;
+  // Spinner resolves on US data alone — India can still be loading without blocking the UI.
+  const scanning  = usData?.scanning || !usData?.last_updated;
   const hasData   = usData?.last_updated || inData?.last_updated;
   const dot       = document.getElementById('live-dot');
   const label     = document.getElementById('live-label');
@@ -579,7 +580,7 @@ function renderContent(market, data) {
   const buys  = sigs.filter(s => s.label.includes('BUY'));
   const sells = sigs.filter(s => s.label.includes('SELL'));
   const holds = sigs.filter(s => s.label === 'HOLD');
-  const best  = buys.reduce((a,b) => (b.score > (a?.score||−999)) ? b : a, null);
+  const best  = buys.reduce((a,b) => (b.score > (a?.score||-999)) ? b : a, null);
 
   let html = '';
 
