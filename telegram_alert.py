@@ -21,8 +21,8 @@ import urllib.request, urllib.parse, sys, os, time, logging
 from datetime import datetime, timedelta
 
 # ── Config ────────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = "8955387419:AAHEmmHoibcYkv2MRcFElzX__4TOrP55PjQ"
-TELEGRAM_CHAT_ID = "1578063059"
+TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_BOT_TOKEN", "8955387419:AAHEmmHoibcYkv2MRcFElzX__4TOrP55PjQ")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1578063059")
 PORTFOLIO        = ["AAPL", "GOOGL", "PLTR", "VOO", "NVDA", "AMD", "AMZN", "CRM"]
 
 WATCHLIST = [
@@ -642,6 +642,10 @@ def build_message(signals, penny_picks, watchlist_picks=None, spy_pct=None, mark
 # ── Main ──────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    if not os.environ.get("TELEGRAM_BOT_TOKEN"):
+        log.warning("TELEGRAM_BOT_TOKEN environment variable not set — exiting cleanly without sending alerts.")
+        sys.exit(0)
+
     log.info("=== McLean Trade Bot starting ===")
 
     # ── Market mood check ─────────────────────────────────────────

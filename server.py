@@ -305,6 +305,82 @@ def score_penny(sym, hist, max_price=5.0):
     except:
         return None
 
+# ── Richer signal schema ──────────────────────────────────────────
+def build_signal(s):
+    """Take an existing signal dict and return it with all original fields
+    PLUS the richer beginner-friendly fields. Never removes existing fields."""
+    score = s.get("score", 0)
+    rsi = s.get("rsi", 50)
+    price = s.get("price", 0) or 0
+    support = s.get("support", price * 0.95)
+    resistance = s.get("resistance", price * 1.05)
+    stop_loss = s.get("stop_loss", round(price * 0.95, 2))
+    label = s.get("label", "HOLD")
+    pct = s.get("pct", 0) or 0
+    atr = s.get("atr") or (price * 0.02 if price else 1)
+    safe_price = price if price else 1
+
+    # confidence: score contributes ~60%, rsi momentum contributes ~40%
+    if label == "BUY" or label == "STRONG BUY":
+        rsi_contrib = max(0, min(40, int((rsi - 30) / 40 * 40)))
+    else:
+        rsi_contrib = max(0, min(40, int((70 - rsi) / 40 * 40)))
+    confidence = min(95, max(10, abs(score) * 12 + rsi_contrib))
+
+    # risk band
+    if atr / safe_price > 0.04 or abs(pct) > 3:
+        risk_band = "High"
+    elif atr / safe_price > 0.02 or abs(pct) > 1.5:
+        risk_band = "Medium"
+    else:
+        risk_band = "Low"
+
+    # setup type
+    if score >= 4:
+        setup_type = "Breakout" if price > resistance * 0.98 else "Momentum"
+    elif score <= -2:
+        setup_type = "Breakdown"
+    elif score <= 1 and label == "HOLD":
+        setup_type = "Range"
+    elif rsi < 35:
+        setup_type = "Reversal"
+    else:
+        setup_type = "Trend"
+
+    # entry zone
+    entry_low = round(safe_price * 0.99, 2)
+    entry_high = round(safe_price, 2)
+    entry_zone = f"${entry_low:.2f} – ${entry_high:.2f}"
+
+    # targets
+    target_1 = round(price + (resistance - price) * 0.5, 2)
+    target_2 = round(resistance, 2)
+
+    # beginner note
+    if "BUY" in label:
+        beginner_note = (f"Consider entering between {entry_zone}. First target is "
+                         f"${target_1:.2f}. Exit if price falls below ${stop_loss:.2f}.")
+    elif "SELL" in label:
+        beginner_note = (f"This stock is showing weakness. If you hold it, consider "
+                         f"setting a stop at ${stop_loss:.2f}.")
+    else:
+        beginner_note = (f"No clear signal right now. Watch for price to break above "
+                         f"${resistance:.2f} or below ${support:.2f} before acting.")
+
+    return {
+        **s,
+        "ticker": s.get("symbol", ""),
+        "signal": label,
+        "setup_type": setup_type,
+        "risk_band": risk_band,
+        "confidence": confidence,
+        "entry_zone": entry_zone,
+        "target_1": target_1,
+        "target_2": target_2,
+        "invalidation": stop_loss,
+        "beginner_note": beginner_note,
+    }
+
 # ── Market mood ───────────────────────────────────────────────────
 def market_mood(proxy):
     try:
@@ -341,6 +417,7 @@ def run_us_scan():
             if r:
                 if bearish and "BUY" in r["label"]:
                     r["label"]="HOLD"; r["why"]=f"Suppressed — SPY down {spy_pct}%"
+                r = build_signal(r)
                 signals.append(r)
                 log.info(f"  {sym}: {r['label']}  score={r['score']}")
             else:
@@ -357,7 +434,7 @@ def run_us_scan():
         wl_picks = []
         for sym in wl:
             r = score(sym, wh.get(sym))
-            if r and r["score"]>=2: wl_picks.append(r)
+            if r and r["score"]>=2: wl_picks.append(build_signal(r))
         wl_picks.sort(key=lambda x:x["score"],reverse=True)
         wl_picks = wl_picks[:3]
         if bearish: wl_picks=[s for s in wl_picks if "BUY" not in s["label"]]
@@ -397,6 +474,7 @@ def run_india_scan():
             if r:
                 if bearish and "BUY" in r["label"]:
                     r["label"]="HOLD"; r["why"]=f"Suppressed — NIFTY down {nifty_pct}%"
+                r = build_signal(r)
                 signals.append(r)
                 log.info(f"  {sym}: {r['label']}")
             else:
@@ -411,7 +489,7 @@ def run_india_scan():
         wl_picks = []
         for sym in INDIA_WATCHLIST:
             r = score(sym, wh.get(sym), ns=True)
-            if r and r["score"]>=2: wl_picks.append(r)
+            if r and r["score"]>=2: wl_picks.append(build_signal(r))
         wl_picks.sort(key=lambda x:x["score"],reverse=True)
         wl_picks = wl_picks[:3]
         if bearish: wl_picks=[s for s in wl_picks if "BUY" not in s["label"]]

@@ -148,6 +148,30 @@
     }
     .stat label { font-size: 10px; color: var(--muted); display: block; }
     .stat span { font-size: 12px; font-weight: 500; }
+
+    /* ── Richer signal fields ── */
+    .sig-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+    .chip { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; border: 1px solid var(--border); color: var(--muted); }
+    .chip-setup { background: rgba(59,130,246,0.12); color: #58a6ff; border-color: rgba(59,130,246,0.3); }
+    .chip.risk-g { background: rgba(63,185,80,0.12); color: var(--green); border-color: rgba(63,185,80,0.3); }
+    .chip.risk-y { background: rgba(245,158,11,0.12); color: #d29922; border-color: rgba(245,158,11,0.3); }
+    .chip.risk-r { background: rgba(248,81,73,0.12); color: var(--red); border-color: rgba(248,81,73,0.3); }
+    .conf-wrap { margin-top: 12px; }
+    .conf-head { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+    .conf-pct { font-weight: 700; }
+    .conf-pct.conf-g { color: var(--green); }
+    .conf-pct.conf-y { color: #d29922; }
+    .conf-pct.conf-r { color: var(--red); }
+    .conf-track { height: 6px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+    .conf-fill { height: 100%; border-radius: 4px; }
+    .conf-fill.conf-g { background: var(--green); }
+    .conf-fill.conf-y { background: #d29922; }
+    .conf-fill.conf-r { background: var(--red); }
+    .trade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
+    .tg label { font-size: 10px; color: var(--muted); display: block; }
+    .tg span { font-size: 12px; font-weight: 600; }
+    .beginner-note { display: flex; gap: 7px; align-items: flex-start; font-size: 11px; line-height: 1.5; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 7px; padding: 8px 10px; margin-top: 12px; }
+    .bn-icon { flex-shrink: 0; }
     .card-loading {
       opacity: 0.5;
       text-align: center;
@@ -256,7 +280,32 @@ function renderCard(symbol, q) {
       <div class="stat"><label>Prev Close</label><span>$${fmt(q?.regularMarketPreviousClose)}</span></div>
       <div class="stat"><label>High</label><span>$${fmt(q?.regularMarketDayHigh)}</span></div>
       <div class="stat"><label>Low</label><span>$${fmt(q?.regularMarketDayLow)}</span></div>
-    </div>`;
+    </div>
+    ${renderSignalExtras(q)}`;
+}
+
+// Render richer signal fields if the quote object carries them (forward-compatible).
+function renderSignalExtras(q) {
+  if (!q || (q.confidence == null && !q.setup_type && !q.entry_zone && !q.beginner_note)) return '';
+  const conf    = q.confidence ?? null;
+  const confCls = conf == null ? '' : conf > 70 ? 'conf-g' : conf >= 40 ? 'conf-y' : 'conf-r';
+  const riskCls = { 'Low':'risk-g', 'Medium':'risk-y', 'High':'risk-r' }[q.risk_band] || '';
+  return `
+    ${(q.setup_type || q.risk_band) ? `<div class="sig-chips">
+      ${q.setup_type ? `<span class="chip chip-setup">${q.setup_type}</span>` : ''}
+      ${q.risk_band ? `<span class="chip ${riskCls}">${q.risk_band} risk</span>` : ''}
+    </div>` : ''}
+    ${conf != null ? `<div class="conf-wrap">
+      <div class="conf-head"><span>How confident?</span><span class="conf-pct ${confCls}">${conf}%</span></div>
+      <div class="conf-track"><div class="conf-fill ${confCls}" style="width:${conf}%"></div></div>
+    </div>` : ''}
+    ${(q.entry_zone || q.target_1 != null) ? `<div class="trade-grid">
+      ${q.entry_zone ? `<div class="tg"><label>Entry zone</label><span>${q.entry_zone}</span></div>` : ''}
+      ${q.target_1 != null ? `<div class="tg"><label>Target 1</label><span>$${fmt(q.target_1)}</span></div>` : ''}
+      ${q.target_2 != null ? `<div class="tg"><label>Target 2</label><span>$${fmt(q.target_2)}</span></div>` : ''}
+      ${q.invalidation != null ? `<div class="tg"><label>Invalidation</label><span>$${fmt(q.invalidation)}</span></div>` : ''}
+    </div>` : ''}
+    ${q.beginner_note ? `<div class="beginner-note"><span class="bn-icon">💡</span><span>${q.beginner_note}</span></div>` : ''}`;
 }
 
 async function refreshAll() {
