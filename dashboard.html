@@ -223,6 +223,38 @@
     .bm-val.amber { color: var(--amber); }
     .bm-divider { width: 1px; background: var(--border); align-self: stretch; margin: 2px 0; }
 
+    /* ── Top 5 Picks ── */
+    .toppicks-section { padding: 20px 24px 0; }
+    .toppicks-banner {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-left: 3px solid var(--border2);
+      border-radius: 10px; padding: 14px 18px;
+      font-size: 13px; color: var(--muted); line-height: 1.5;
+    }
+    .toppicks-row {
+      display: flex; gap: 12px; overflow-x: auto; padding: 2px 24px 6px;
+      scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+    }
+    .toppicks-row::-webkit-scrollbar { height: 6px; }
+    .toppicks-row::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+    .tp-card {
+      flex: 0 0 280px; scroll-snap-align: start;
+      background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(234,179,8,0.04) 100%);
+      border: 1px solid rgba(34,197,94,0.22); border-left: 3px solid var(--green);
+      border-radius: 12px; padding: 14px 16px; cursor: pointer;
+      position: relative; overflow: hidden;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .tp-card:hover { border-color: rgba(34,197,94,0.55); box-shadow: 0 6px 22px rgba(34,197,94,0.1); }
+    .tp-toppick-badge {
+      position: absolute; top: 10px; right: 12px;
+      font-size: 9px; font-weight: 700; color: #b8860b;
+      background: rgba(234,179,8,0.16); border: 1px solid rgba(234,179,8,0.3);
+      padding: 2px 7px; border-radius: 8px; letter-spacing: 0.04em;
+    }
+    .tp-sym { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding-right: 64px; }
+    .tp-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+
     /* ── Penny card ── */
     .penny-card {
       background: var(--surface); border: 1px solid var(--border);
@@ -342,6 +374,7 @@
 <div class="panel active" id="panel-us">
   <div class="mood-bar" id="us-mood"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
   <div class="stats-bar" id="us-stats"></div>
+  <div id="us-toppicks"></div>
   <div id="us-content"><div class="loading-box"><div class="big-spinner"></div><p>Running initial scan…</p><small>Portfolio results appear in ~30 seconds</small></div></div>
 </div>
 
@@ -453,6 +486,70 @@ function schedulePoll() {
 async function fetchAll() {
   await Promise.all([fetchSignals('us'), fetchSignals('india')]);
   updateHeader();
+  fetchTopPicks();
+}
+
+// ── Top 5 Picks ───────────────────────────────────────────────────
+async function fetchTopPicks() {
+  try {
+    const r = await fetch('/api/top-picks?market=us');
+    if (!r.ok) return;
+    renderTopPicks(await r.json());
+  } catch(e) {
+    // Server not yet ready
+  }
+}
+
+function renderTopPicks(data) {
+  const el = document.getElementById('us-toppicks');
+  if (!el) return;
+
+  if (data.suppressed) {
+    el.innerHTML = `<div class="toppicks-section">
+      ${section('🔥 Top 5 Picks Today', 0)}
+      <div class="toppicks-banner">📉 Market is bearish today — no high-confidence BUY picks. Stay patient.</div>
+    </div>`;
+    return;
+  }
+
+  const picks = data.picks || [];
+  if (!picks.length) {
+    el.innerHTML = `<div class="toppicks-section">
+      ${section('🔥 Top 5 Picks Today', 0)}
+      <div class="toppicks-banner">🔍 No strong BUY setups found right now. Check back after the next scan.</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = section('🔥 Top 5 Picks Today', picks.length, 'Your portfolio + curated large-caps — highest-conviction BUYs')
+    + `<div class="toppicks-row">${picks.map(topPickCard).join('')}</div>`;
+}
+
+function topPickCard(s) {
+  const sym     = s.symbol || s.ticker;
+  const conf    = s.confidence ?? null;
+  const confCls = conf == null ? '' : conf > 70 ? 'conf-g' : conf >= 40 ? 'conf-y' : 'conf-r';
+  const riskCls = { 'Low':'risk-g', 'Medium':'risk-y', 'High':'risk-r' }[s.risk_band] || '';
+  return `
+  <div class="tp-card" onclick="openChart('${sym}',false)">
+    <span class="tp-toppick-badge">★ Top Pick</span>
+    <div class="tp-sym">${sym} ${badge(s.label)}</div>
+    <div class="tp-chips">
+      ${s.setup_type ? `<span class="chip chip-setup">${s.setup_type}</span>` : ''}
+      ${s.risk_band ? `<span class="chip ${riskCls}">${s.risk_band} risk</span>` : ''}
+    </div>
+    ${conf != null ? `<div class="conf-wrap">
+      <div class="conf-head"><span>How confident?</span><span class="conf-pct ${confCls}">${conf}%</span></div>
+      <div class="conf-track"><div class="conf-fill ${confCls}" style="width:${conf}%"></div></div>
+    </div>` : ''}
+    <div class="trade-grid">
+      ${s.entry_zone ? `<div class="tg"><label>Entry zone</label><span>${s.entry_zone}</span></div>` : ''}
+      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,false)}</span></div>` : ''}
+      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,false)}</span></div>` : ''}
+      ${s.invalidation != null ? `<div class="tg"><label>Invalidation</label><span>${fmt(s.invalidation,false)}</span></div>` : ''}
+    </div>
+    ${s.beginner_note ? `<div class="beginner-note"><span class="bn-icon">💡</span><span>${s.beginner_note}</span></div>` : ''}
+  </div>`;
 }
 
 async function fetchSignals(market) {

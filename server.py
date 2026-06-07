@@ -76,6 +76,13 @@ US_WATCHLIST = [
     "META","MSFT","NFLX","TSLA","UBER","AVGO","QCOM","MU","JPM","GS",
     "V","MA","UNH","LLY","XOM","CVX","COST","WMT","HD","NKE",
 ]
+LARGECAP_WATCHLIST = [
+    "MSFT","META","AMZN","NVDA","GOOGL","AAPL","TSLA","BRK-B","JPM","V",
+    "UNH","XOM","LLY","JNJ","WMT","MA","PG","HD","MRK","ABBV",
+    "AVGO","CVX","PEP","KO","COST","ADBE","CRM","TMO","MCD","ACN",
+    "BAC","NFLX","AMD","QCOM","TXN","INTC","NOW","INTU","IBM","GS",
+    "MS","RTX","CAT","DE","BA","UPS","HON","AMGN","GILD","PFE"
+]
 PENNY_LIST = [
     # Crypto miners
     "HIVE","HUT","BTBT","WULF","CIFR","BITF",
@@ -399,6 +406,9 @@ _cache = {
     "us":    {"signals":[],"penny_picks":[],"watchlist_picks":[],"spy_pct":None,"market_bearish":False,"last_updated":None,"scanning":False,"error":None},
     "india": {"signals":[],"watchlist_picks":[],"penny_picks":[],"nifty_pct":None,"market_bearish":False,"last_updated":None,"scanning":False,"error":None},
 }
+_top_picks_cache = {
+    "us": {"suppressed":False,"reason":None,"picks":[],"last_updated":None},
+}
 
 def run_us_scan():
     log.info("=== US scan start ===")
@@ -513,10 +523,53 @@ def run_india_scan():
         log.error(f"India scan crashed: {e}", exc_info=True)
         with _lock: _cache["india"]["scanning"]=False; _cache["india"]["error"]=str(e)
 
+def run_top_picks_scan():
+    """Scan portfolio + curated large-caps, return top 5 BUY signals (US only)."""
+    log.info("=== Top picks scan start ===")
+    try:
+        spy_pct, bearish = market_mood("SPY")
+        cfg  = read_config()
+        port = cfg.get("us_portfolio", US_PORTFOLIO)
+
+        # Combine portfolio + curated large-caps, dedupe (preserve order)
+        seen = set()
+        universe = []
+        for sym in list(port) + LARGECAP_WATCHLIST:
+            if sym not in seen:
+                seen.add(sym); universe.append(sym)
+
+        if bearish:
+            result = {"suppressed":True,
+                      "reason":"Market is bearish — BUY signals suppressed to protect capital",
+                      "picks":[], "last_updated":datetime.now().isoformat()}
+            with _lock: _top_picks_cache["us"] = result
+            log.info("Top picks suppressed — market bearish")
+            return result
+
+        log.info(f"Top picks: scoring {len(universe)} tickers...")
+        hist = batch_dl(universe, "1y")
+        buys = []
+        for sym in universe:
+            r = score(sym, hist.get(sym))
+            if r and "BUY" in r["label"]:
+                buys.append(build_signal(r))
+        buys.sort(key=lambda x:x["score"], reverse=True)
+        picks = buys[:5]
+
+        result = {"suppressed":False, "reason":None, "picks":picks,
+                  "last_updated":datetime.now().isoformat()}
+        with _lock: _top_picks_cache["us"] = result
+        log.info(f"=== Top picks scan done: {len(picks)} picks ===")
+        return result
+    except Exception as e:
+        log.error(f"Top picks scan crashed: {e}", exc_info=True)
+        return None
+
 def background_loop():
     while True:
         try:
             run_us_scan()
+            run_top_picks_scan()
             run_india_scan()
             log.info("Both scans done. Sleeping 30 min...")
         except Exception as e:
@@ -551,6 +604,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path)
         if   p.path=="/api/signals": self._signals(p)
+        elif p.path=="/api/top-picks": self._top_picks(p)
         elif p.path=="/api/quotes":  self._quotes(p)
         elif p.path=="/api/config":  self._json(200,read_config())
         elif p.path=="/api/scan":    self._trigger_scan(p)
@@ -574,6 +628,25 @@ class Handler(SimpleHTTPRequestHandler):
         if mkt not in ("us","india"): self._json(400,{"error":"invalid market"}); return
         with _lock: data=dict(_cache[mkt])
         self._json(200,data)
+
+    def _top_picks(self,p):
+        mkt = parse_qs(p.query).get("market",["us"])[0].lower()
+        if mkt != "us": self._json(400,{"error":"only US market supported"}); return
+        with _lock: cached = dict(_top_picks_cache["us"])
+        fresh = False
+        if cached.get("last_updated"):
+            try:
+                age = (datetime.now()-datetime.fromisoformat(cached["last_updated"])).total_seconds()
+                fresh = age < 30*60
+            except Exception:
+                fresh = False
+        if not fresh:
+            result = run_top_picks_scan()
+            if result: cached = result
+        self._json(200,{"suppressed":cached.get("suppressed",False),
+                        "reason":cached.get("reason"),
+                        "picks":cached.get("picks",[]),
+                        "last_updated":cached.get("last_updated")})
 
     def _quotes(self,p):
         syms=[s.strip().upper() for s in parse_qs(p.query).get("symbols",[""])[0].split(",") if s.strip()]
