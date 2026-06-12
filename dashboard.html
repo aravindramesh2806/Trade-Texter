@@ -252,6 +252,10 @@
     .bm-val.green { color: var(--green); }
     .bm-val.amber { color: var(--amber); }
     .bm-divider { width: 1px; background: var(--border); align-self: stretch; margin: 2px 0; }
+    .best-spark { margin: 10px 0 14px; height: 72px; }
+    .best-spark svg { width: 100%; height: 72px; display: block; }
+    .best-live { font-size: 10px; font-weight: 700; color: var(--green); display: inline-flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; justify-content: flex-end; }
+    .best-live .live-dot-sm { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
 
     /* ── Top 5 Picks ── */
     .toppicks-section { padding: 20px 24px 0; }
@@ -289,6 +293,10 @@
     .tp-price .tp-pct.red { color: var(--red); }
     .tp-reason { font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
     .tp-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+    .tp-live { font-size: 9px; font-weight: 700; color: var(--green); display: inline-flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .tp-live .live-dot-sm { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    .tp-spark { margin: 2px 0 10px; height: 46px; }
+    .tp-spark svg { width: 100%; height: 46px; display: block; }
 
     /* ── Penny card ── */
     .penny-card {
@@ -629,27 +637,48 @@ async function loadAssetCard(asset) {
     if (deltaEl) deltaEl.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`;
 
     // build sparkline path with dashed baseline at first value
-    const min = Math.min(...closes), max = Math.max(...closes);
-    const range = (max - min) || 1;
-    const w = 300, h = 90, pad = 4;
-    const pts = closes.map((c, i) => {
-      const x = (i / (closes.length - 1)) * (w - pad * 2) + pad;
-      const y = h - pad - ((c - min) / range) * (h - pad * 2);
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    });
-    const baseY = (h - pad - ((first - min) / range) * (h - pad * 2)).toFixed(2);
-    const color = up ? '#22c55e' : '#ef4444';
-    const areaPts = `${pad},${h-pad} ${pts.join(' ')} ${w-pad},${h-pad}`;
-    svg.innerHTML = `
-      <line x1="${pad}" y1="${baseY}" x2="${w-pad}" y2="${baseY}" stroke="#555" stroke-width="1" stroke-dasharray="3,3"/>
-      <polygon points="${areaPts}" fill="${color}" opacity="0.10"/>
-      <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    svg.innerHTML = buildSparkPath(closes, 300, 90);
   } catch (e) {
     if (pctEl) pctEl.textContent = '—';
     if (priceEl) priceEl.textContent = 'Error';
     if (deltaEl) deltaEl.textContent = '';
     svg.innerHTML = '';
   }
+}
+
+// Build a sparkline (area + line + dashed baseline at first value) from an array of closes
+function buildSparkPath(closes, w, h, pad = 4) {
+  if (!closes || closes.length < 2) return '';
+  const first = closes[0], last = closes[closes.length - 1];
+  const up = last >= first;
+  const min = Math.min(...closes), max = Math.max(...closes);
+  const range = (max - min) || 1;
+  const pts = closes.map((c, i) => {
+    const x = (i / (closes.length - 1)) * (w - pad * 2) + pad;
+    const y = h - pad - ((c - min) / range) * (h - pad * 2);
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+  const baseY = (h - pad - ((first - min) / range) * (h - pad * 2)).toFixed(2);
+  const color = up ? '#22c55e' : '#ef4444';
+  const areaPts = `${pad},${h-pad} ${pts.join(' ')} ${w-pad},${h-pad}`;
+  return `
+    <line x1="${pad}" y1="${baseY}" x2="${w-pad}" y2="${baseY}" stroke="#555" stroke-width="1" stroke-dasharray="3,3"/>
+    <polygon points="${areaPts}" fill="${color}" opacity="0.10"/>
+    <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+}
+
+// Fetch intraday candles for a symbol and draw a sparkline into a card
+async function loadCardSpark(sym, svgId, w = 300, h = 60) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  try {
+    const r = await fetch(`/api/chart?symbol=${encodeURIComponent(sym)}&range=1d`);
+    if (!r.ok) return;
+    const d = await r.json();
+    const candles = d.candles || [];
+    if (candles.length < 2) return;
+    svg.innerHTML = buildSparkPath(candles.map(c => c.close), w, h);
+  } catch (e) { /* leave blank */ }
 }
 
 // ── Polling ───────────────────────────────────────────────────────
@@ -703,6 +732,11 @@ function renderTopPicks(data) {
 
   el.innerHTML = section('🔥 Top 5 Picks Today', picks.length, 'Your portfolio + curated large-caps — highest-conviction BUYs')
     + `<div class="toppicks-row">${picks.map(topPickCard).join('')}</div>`;
+
+  picks.forEach(s => {
+    const sym = s.symbol || s.ticker;
+    loadCardSpark(sym, `tp-svg-${sym}`, 300, 46);
+  });
 }
 
 function topPickCard(s) {
@@ -714,7 +748,8 @@ function topPickCard(s) {
   <div class="tp-card" onclick="openChart('${sym}',false)">
     <span class="tp-toppick-badge">★ Top Pick</span>
     <div class="tp-sym">${sym} ${badge(s.label)}</div>
-    ${s.price != null ? `<div class="tp-price">${fmt(s.price,false)} ${s.pct != null ? `<span class="tp-pct ${s.pct >= 0 ? 'green' : 'red'}">${s.pct >= 0 ? '+' : ''}${s.pct}%</span>` : ''}</div>` : ''}
+    ${s.price != null ? `<div class="tp-price">${fmt(s.price,false)} ${s.pct != null ? `<span class="tp-pct ${s.pct >= 0 ? 'green' : 'red'}">${s.pct >= 0 ? '+' : ''}${s.pct}%</span>` : ''} <span class="tp-live"><span class="live-dot-sm"></span>Live</span></div>` : ''}
+    <div class="tp-spark"><svg viewBox="0 0 300 46" preserveAspectRatio="none" id="tp-svg-${sym}"></svg></div>
     ${(s.reasons && s.reasons.length) ? `<div class="tp-reason">📌 ${s.reasons.slice(0,2).join(' · ')}</div>` : ''}
     <div class="tp-chips">
       ${s.setup_type ? `<span class="chip chip-setup">${s.setup_type}</span>` : ''}
@@ -877,8 +912,10 @@ function renderContent(market, data) {
           <div class="best-right">
             <div class="best-price">${fmt(best.price, india)}</div>
             <div class="best-chg ${best.pct>=0?'up':'down'}">${best.pct>=0?'▲':'▼'} ${Math.abs(best.pct).toFixed(2)}%</div>
+            <div class="best-live"><span class="live-dot-sm"></span>Live</div>
           </div>
         </div>
+        <div class="best-spark"><svg viewBox="0 0 600 72" preserveAspectRatio="none" id="best-svg-${best.symbol}"></svg></div>
         <div class="best-why">${best.why}</div>
         <div class="best-metrics">
           <div class="bm"><div class="bm-label">Target</div><div class="bm-val green">${fmt(best.resistance,india)} <small style="font-size:11px">(+${profPct}%)</small></div></div>
@@ -907,6 +944,8 @@ function renderContent(market, data) {
 
   html += `<div class="page-end"></div>`;
   el.innerHTML = html;
+
+  if (best) loadCardSpark(india ? `${best.symbol}.NS` : best.symbol, `best-svg-${best.symbol}`, 600, 72);
 }
 
 function section(title, count, sub='') {
