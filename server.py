@@ -696,7 +696,32 @@ def background_loop():
         time.sleep(30*60)
 
 # ── Live quote fetcher (for price cards) ─────────────────────────
+# Short TTL cache — quotes don't need to be fetched more than once
+# every few seconds even if multiple clients/cards request them.
+_QUOTE_CACHE = {}
+_QUOTE_CACHE_TTL = 15  # seconds
+
 def live_quotes(symbols):
+    now = time.time()
+    cached_results = []
+    to_fetch = []
+    for sym in symbols:
+        cached = _QUOTE_CACHE.get(sym)
+        if cached and (now - cached[0]) < _QUOTE_CACHE_TTL:
+            cached_results.append(cached[1])
+        else:
+            to_fetch.append(sym)
+    if not to_fetch:
+        return cached_results
+
+    fetched = _live_quotes_fetch(to_fetch)
+    for r in fetched:
+        sym = r.get("symbol")
+        if sym and "error" not in r:
+            _QUOTE_CACHE[sym] = (now, r)
+    return cached_results + fetched
+
+def _live_quotes_fetch(symbols):
     results = []
     try:
         tickers = yf.Tickers(" ".join(symbols))
@@ -717,7 +742,20 @@ def live_quotes(symbols):
     return results
 
 # ── Chart OHLC fetcher ───────────────────────────────────────────
+# Short TTL cache — sparklines on the dashboard request the same
+# symbol/range repeatedly (top picks, best opportunity, asset cards),
+# so caching avoids redundant yfinance round-trips and makes the page
+# feel much snappier.
+_CHART_CACHE = {}
+_CHART_CACHE_TTL = {"1d": 60, "1w": 5*60, "1mo": 15*60, "6mo": 30*60, "1y": 30*60, "5y": 60*60}
+
 def chart_candles(symbol="SPY", rng="1d"):
+    key = (symbol, rng)
+    ttl = _CHART_CACHE_TTL.get(rng, 60)
+    cached = _CHART_CACHE.get(key)
+    if cached and (time.time() - cached[0]) < ttl:
+        return cached[1]
+
     params = {
         "1d":  {"period": "1d",  "interval": "5m"},
         "1w":  {"period": "5d",  "interval": "30m"},
@@ -747,6 +785,7 @@ def chart_candles(symbol="SPY", rng="1d"):
             "low":   round(l, 2),
             "close": round(c, 2),
         })
+    _CHART_CACHE[key] = (time.time(), candles)
     return candles
 
 # ── HTTP Handler ──────────────────────────────────────────────────

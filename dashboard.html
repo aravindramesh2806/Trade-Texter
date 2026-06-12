@@ -54,10 +54,10 @@
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
     .live-dot.scanning { background: var(--amber); }
     .live-dot.offline { background: var(--muted2); animation: none; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    @keyframes pulse { 0%,100%{opacity:0.9} 50%{opacity:0.45} }
 
     /* Buttons */
-    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); transition: all 0.15s; white-space: nowrap; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); transition: all 0.25s ease; white-space: nowrap; }
     .btn:hover { border-color: var(--border2); background: var(--surface3); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-primary { background: var(--green); color: #000; border-color: var(--green); font-weight: 600; }
@@ -105,7 +105,7 @@
     .chart-tab.active { color: var(--text); background: var(--surface3); border-color: var(--green); }
     .chart-status { font-size: 12px; color: var(--muted); padding: 10px 0; text-align: center; }
     .assets-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-    .asset-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; box-sizing: border-box; height: 150px; display: flex; flex-direction: column; overflow: hidden; }
+    .asset-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-sizing: border-box; height: 150px; display: flex; flex-direction: column; overflow: hidden; transition: border-color 0.25s ease; }
     .ac-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
     .ac-name { font-size: 13px; font-weight: 700; color: var(--text); }
     .ac-pct { font-size: 13px; font-weight: 700; white-space: nowrap; }
@@ -151,8 +151,8 @@
     /* ── Signal card ── */
     .sig-card {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 14px 16px; cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.15s;
+      border-radius: 12px; padding: 14px 16px; cursor: pointer;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
       position: relative; overflow: hidden;
     }
     .sig-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
@@ -163,7 +163,7 @@
     .sig-card.hold::before    { background: var(--border2); }
     .sig-card.strong-buy      { background: rgba(34,197,94,0.04); }
     .sig-card.strong-sell     { background: rgba(239,68,68,0.04); }
-    .sig-card:hover { border-color: var(--border2); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+    .sig-card:hover { border-color: var(--border2); box-shadow: 0 4px 18px rgba(0,0,0,0.25); transform: translateY(-1px); }
 
     .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
     .card-left { display: flex; flex-direction: column; gap: 4px; }
@@ -231,13 +231,13 @@
     /* ── Best pick card ── */
     .best-section { padding: 20px 24px 0; }
     .best-card {
-      background: linear-gradient(135deg, rgba(34,197,94,0.07) 0%, rgba(59,130,246,0.05) 100%);
-      border: 1px solid rgba(34,197,94,0.25);
-      border-radius: 12px; padding: 18px 20px; cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.15s;
+      background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(59,130,246,0.04) 100%);
+      border: 1px solid rgba(34,197,94,0.2);
+      border-radius: 14px; padding: 18px 20px; cursor: pointer;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
       position: relative; overflow: hidden;
     }
-    .best-card:hover { border-color: rgba(34,197,94,0.5); box-shadow: 0 8px 30px rgba(34,197,94,0.08); }
+    .best-card:hover { border-color: rgba(34,197,94,0.4); box-shadow: 0 8px 28px rgba(34,197,94,0.06); transform: translateY(-1px); }
     .best-eyebrow { font-size: 10px; font-weight: 700; color: var(--green); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
     .best-main { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
     .best-sym { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
@@ -273,13 +273,13 @@
     .toppicks-row::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
     .tp-card {
       flex: 0 0 280px; scroll-snap-align: start;
-      background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(234,179,8,0.04) 100%);
-      border: 1px solid rgba(34,197,94,0.22); border-left: 3px solid var(--green);
-      border-radius: 12px; padding: 14px 16px; cursor: pointer;
+      background: linear-gradient(135deg, rgba(34,197,94,0.05) 0%, rgba(234,179,8,0.03) 100%);
+      border: 1px solid rgba(34,197,94,0.18); border-left: 3px solid var(--green);
+      border-radius: 14px; padding: 14px 16px; cursor: pointer;
       position: relative; overflow: hidden;
-      transition: border-color 0.15s, box-shadow 0.15s;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
     }
-    .tp-card:hover { border-color: rgba(34,197,94,0.55); box-shadow: 0 6px 22px rgba(34,197,94,0.1); }
+    .tp-card:hover { border-color: rgba(34,197,94,0.45); box-shadow: 0 6px 20px rgba(34,197,94,0.08); transform: translateY(-1px); }
     .tp-toppick-badge {
       position: absolute; top: 10px; right: 12px;
       font-size: 9px; font-weight: 700; color: #b8860b;
@@ -301,8 +301,8 @@
     /* ── Penny card ── */
     .penny-card {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 12px 14px; cursor: pointer;
-      transition: border-color 0.15s;
+      border-radius: 12px; padding: 12px 14px; cursor: pointer;
+      transition: border-color 0.25s ease;
       border-top: 2px solid var(--orange);
     }
     .penny-card:hover { border-color: var(--orange); }
@@ -667,18 +667,40 @@ function buildSparkPath(closes, w, h, pad = 4) {
     <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
 }
 
-// Fetch intraday candles for a symbol and draw a sparkline into a card
+// Fetch intraday candles for a symbol and draw a sparkline into a card.
+// In-memory cache + in-flight de-dupe: the same symbol often appears in
+// multiple cards (Best Opportunity + Top Picks), so this avoids firing
+// duplicate /api/chart requests for the same data.
+const _sparkCache = new Map();
+const _sparkInflight = new Map();
+const SPARK_CACHE_TTL = 45 * 1000;
+
 async function loadCardSpark(sym, svgId, w = 300, h = 60) {
   const svg = document.getElementById(svgId);
   if (!svg) return;
   try {
-    const r = await fetch(`/api/chart?symbol=${encodeURIComponent(sym)}&range=1d`);
-    if (!r.ok) return;
-    const d = await r.json();
-    const candles = d.candles || [];
-    if (candles.length < 2) return;
-    svg.innerHTML = buildSparkPath(candles.map(c => c.close), w, h);
+    const closes = await getSparkCloses(sym);
+    if (!closes || closes.length < 2) return;
+    svg.innerHTML = buildSparkPath(closes, w, h);
   } catch (e) { /* leave blank */ }
+}
+
+function getSparkCloses(sym) {
+  const cached = _sparkCache.get(sym);
+  if (cached && (Date.now() - cached.ts) < SPARK_CACHE_TTL) return Promise.resolve(cached.closes);
+  if (_sparkInflight.has(sym)) return _sparkInflight.get(sym);
+
+  const p = fetch(`/api/chart?symbol=${encodeURIComponent(sym)}&range=1d`)
+    .then(r => r.ok ? r.json() : { candles: [] })
+    .then(d => {
+      const closes = (d.candles || []).map(c => c.close);
+      _sparkCache.set(sym, { ts: Date.now(), closes });
+      return closes;
+    })
+    .finally(() => _sparkInflight.delete(sym));
+
+  _sparkInflight.set(sym, p);
+  return p;
 }
 
 // ── Polling ───────────────────────────────────────────────────────
