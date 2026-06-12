@@ -224,6 +224,7 @@
     .tg { background: var(--surface2); padding: 6px 8px; }
     .tg label { font-size: 9px; color: var(--muted2); display: block; margin-bottom: 2px; font-weight: 500; }
     .tg span { font-size: 12px; font-weight: 600; color: var(--text); }
+    .tg-eta { font-size: 9px; font-weight: 500; color: var(--muted2); }
 
     .beginner-note { display: flex; gap: 7px; align-items: flex-start; font-size: 11px; line-height: 1.5; color: var(--text); background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.18); border-radius: 7px; padding: 8px 10px; margin-bottom: 10px; }
     .bn-icon { flex-shrink: 0; }
@@ -783,8 +784,8 @@ function topPickCard(s) {
     </div>` : ''}
     <div class="trade-grid">
       ${s.entry_zone ? `<div class="tg"><label>Entry zone</label><span>${s.entry_zone}</span></div>` : ''}
-      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,false)}</span></div>` : ''}
-      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,false)}</span></div>` : ''}
+      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,false)}${s.target_1_date ? ` <small class="tg-eta">~${s.target_1_date}</small>` : ''}</span></div>` : ''}
+      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,false)}${s.target_2_date ? ` <small class="tg-eta">~${s.target_2_date}</small>` : ''}</span></div>` : ''}
       ${s.invalidation != null ? `<div class="tg"><label>Invalidation</label><span>${fmt(s.invalidation,false)}</span></div>` : ''}
     </div>
     ${s.beginner_note ? `<div class="beginner-note"><span class="bn-icon">💡</span><span>${s.beginner_note}</span></div>` : ''}
@@ -1018,8 +1019,8 @@ function sigCard(s, india) {
     </div>` : ''}
     ${(s.entry_zone || s.target_1 != null) ? `<div class="trade-grid">
       ${s.entry_zone ? `<div class="tg"><label>Entry zone</label><span>${s.entry_zone}</span></div>` : ''}
-      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,india)}</span></div>` : ''}
-      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,india)}</span></div>` : ''}
+      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,india)}${s.target_1_date ? ` <small class="tg-eta">~${s.target_1_date}</small>` : ''}</span></div>` : ''}
+      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,india)}${s.target_2_date ? ` <small class="tg-eta">~${s.target_2_date}</small>` : ''}</span></div>` : ''}
       ${s.invalidation != null ? `<div class="tg"><label>Invalidation</label><span>${fmt(s.invalidation,india)}</span></div>` : ''}
     </div>` : ''}
     ${s.beginner_note ? `<div class="beginner-note"><span class="bn-icon">💡</span><span>${s.beginner_note}</span></div>` : ''}

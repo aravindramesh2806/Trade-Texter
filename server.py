@@ -9,7 +9,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
-from datetime import datetime
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ── Install deps ──────────────────────────────────────────────────
@@ -167,6 +167,26 @@ def calc_atr(hist, p=14):
     tr = pd.concat([h-l,(h-pc).abs(),(l-pc).abs()],axis=1).max(axis=1)
     return sf(tr.rolling(p).mean().iloc[-1])
 
+def calc_adx(hist, p=14):
+    """Average Directional Index — measures trend STRENGTH (not direction).
+    Used to detect range-bound/choppy conditions where MACD/RSI signals
+    are statistically less reliable (more whipsaws)."""
+    if len(hist) < p*2: return None
+    h,l,c = hist["High"], hist["Low"], hist["Close"]
+    up   = h.diff()
+    down = -l.diff()
+    plus_dm  = np.where((up>down)&(up>0), up, 0.0)
+    minus_dm = np.where((down>up)&(down>0), down, 0.0)
+    pc = c.shift(1)
+    tr = pd.concat([h-l,(h-pc).abs(),(l-pc).abs()],axis=1).max(axis=1)
+    atr = tr.rolling(p).mean()
+    plus_di  = 100 * pd.Series(plus_dm,  index=h.index).rolling(p).mean() / atr.replace(0,np.nan)
+    minus_di = 100 * pd.Series(minus_dm, index=h.index).rolling(p).mean() / atr.replace(0,np.nan)
+    denom = (plus_di+minus_di).replace(0,np.nan)
+    dx = 100 * (plus_di-minus_di).abs() / denom
+    adx = dx.rolling(p).mean()
+    return sf(adx.iloc[-1])
+
 # ── Batch download — parallel individual fetches with per-ticker timeout ──
 def _fetch_one(sym, ticker_sym, period):
     """Fetch one ticker. Returns (sym, DataFrame) or (sym, None)."""
@@ -216,6 +236,7 @@ def score(sym, hist, ns=False):
         supp    = sf(hist["Low"].tail(60).min())
         res     = sf(hist["High"].tail(60).max())
         atr     = calc_atr(hist)
+        adx     = calc_adx(hist)
         avgvol  = sf(hist["Volume"].tail(20).mean())
         curvol  = sf(hist["Volume"].iloc[-1])
         vr      = (curvol/avgvol) if (avgvol and avgvol>0 and curvol) else None
@@ -244,6 +265,13 @@ def score(sym, hist, ns=False):
         ai = calc_ai(close)
         if ai==1:  sc+=1; rs.append("AI trend: upward forecast")
         elif ai==-1: sc-=1; rs.append("AI trend: downward forecast")
+
+        # Range-bound filter — RSI/MACD signals are statistically less
+        # reliable when there's no real trend (low ADX). Dampen the score
+        # toward HOLD rather than firing a full BUY/SELL into chop.
+        if adx is not None and adx < 20 and abs(sc) >= 2:
+            sc += -1 if sc > 0 else 1
+            rs.append(f"ADX {adx:.0f} — range-bound, signal dampened")
 
         if   sc>=4:  lb="STRONG BUY"
         elif sc>=2:  lb="BUY"
@@ -277,6 +305,7 @@ def score(sym, hist, ns=False):
             "support":round(supp,2),"resistance":round(res,2),"stop_loss":stop,
             "profit_pct":round((res-price)/price*100,1),
             "atr":round(atr,2) if atr else None,
+            "adx":round(adx,1) if adx else None,
             "vol_ratio":round(vr,1) if vr else None,
             "ai_signal":ai,"reasons":rs,
         }
@@ -466,10 +495,27 @@ def build_signal(s, fundamentals=None, mkt_ctx=None):
     target_1 = round(price + (resistance - price) * 0.5, 2)
     target_2 = round(resistance, 2)
 
+    # expected target dates — ATR is the average daily price move, so
+    # distance / ATR ≈ how many trading days it'd take to cover that move
+    # at the recent pace. This is a rough ETA, not a prediction — capped
+    # at 60 trading days so flat/illiquid stocks don't produce silly dates.
+    def _eta(target_price):
+        if not atr or atr <= 0: return None, None
+        dist = abs(target_price - price)
+        trading_days = max(1, min(60, dist / atr))
+        calendar_days = int(round(trading_days * 7 / 5))
+        eta = int(round(trading_days))
+        date_str = (datetime.now() + timedelta(days=calendar_days)).strftime("%Y-%m-%d")
+        return eta, date_str
+
+    eta_1_days, target_1_date = _eta(target_1)
+    eta_2_days, target_2_date = _eta(target_2)
+
     # beginner note
     if "BUY" in label:
+        eta_note = f" (around {eta_1_days} trading days, ~{target_1_date})" if eta_1_days else ""
         beginner_note = (f"Consider entering between {entry_zone}. First target is "
-                         f"${target_1:.2f}. Exit if price falls below ${stop_loss:.2f}.")
+                         f"${target_1:.2f}{eta_note}. Exit if price falls below ${stop_loss:.2f}.")
     elif "SELL" in label:
         beginner_note = (f"This stock is showing weakness. If you hold it, consider "
                          f"setting a stop at ${stop_loss:.2f}.")
@@ -491,6 +537,10 @@ def build_signal(s, fundamentals=None, mkt_ctx=None):
         "entry_zone": entry_zone,
         "target_1": target_1,
         "target_2": target_2,
+        "target_1_eta_days": eta_1_days,
+        "target_1_date": target_1_date,
+        "target_2_eta_days": eta_2_days,
+        "target_2_date": target_2_date,
         "invalidation": stop_loss,
         "beginner_note": beginner_note,
         "narrative": generate_narrative(merged, mkt_ctx),
