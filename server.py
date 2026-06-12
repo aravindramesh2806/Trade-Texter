@@ -601,6 +601,36 @@ def live_quotes(symbols):
         log.error(f"live_quotes error: {e}")
     return results
 
+# ── Chart OHLC fetcher ───────────────────────────────────────────
+def chart_candles(symbol="SPY", rng="1d"):
+    params = {
+        "1d":  {"period": "1d",  "interval": "5m"},
+        "1w":  {"period": "5d",  "interval": "30m"},
+        "1mo": {"period": "1mo", "interval": "1d"},
+    }
+    cfg = params.get(rng, params["1d"])
+    df = yf.download(symbol, period=cfg["period"], interval=cfg["interval"],
+                     auto_adjust=False, progress=False)
+    candles = []
+    if df is None or df.empty:
+        return candles
+    # yfinance may return MultiIndex columns when one symbol is requested
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    for idx, row in df.iterrows():
+        o, h, l, c = sf(row.get("Open")), sf(row.get("High")), sf(row.get("Low")), sf(row.get("Close"))
+        if None in (o, h, l, c):
+            continue
+        ts = idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else idx
+        candles.append({
+            "time":  int(ts.timestamp()),
+            "open":  round(o, 2),
+            "high":  round(h, 2),
+            "low":   round(l, 2),
+            "close": round(c, 2),
+        })
+    return candles
+
 # ── HTTP Handler ──────────────────────────────────────────────────
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*a,**kw): super().__init__(*a,directory=DIR,**kw)
@@ -610,6 +640,7 @@ class Handler(SimpleHTTPRequestHandler):
         if   p.path=="/api/signals": self._signals(p)
         elif p.path=="/api/top-picks": self._top_picks(p)
         elif p.path=="/api/quotes":  self._quotes(p)
+        elif p.path=="/api/chart":   self._chart(p)
         elif p.path=="/api/config":  self._json(200,read_config())
         elif p.path=="/api/scan":    self._trigger_scan(p)
         elif p.path=="/api/notify-test": self._test_notify()
@@ -656,6 +687,16 @@ class Handler(SimpleHTTPRequestHandler):
         syms=[s.strip().upper() for s in parse_qs(p.query).get("symbols",[""])[0].split(",") if s.strip()]
         try: self._json(200,{"result":live_quotes(syms)})
         except Exception as e: self._json(500,{"error":str(e)})
+
+    def _chart(self,p):
+        q     = parse_qs(p.query)
+        sym   = q.get("symbol",["SPY"])[0].strip().upper() or "SPY"
+        rng   = q.get("range",["1d"])[0].strip().lower()
+        try:
+            self._json(200,{"candles":chart_candles(sym,rng)})
+        except Exception as e:
+            log.warning(f"chart error {sym} {rng}: {e}")
+            self._json(500,{"error":str(e),"candles":[]})
 
     def _trigger_scan(self,p):
         mkt = parse_qs(p.query).get("market",["both"])[0].lower()
