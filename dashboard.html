@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>McLean Trade Bot — AI Stock Signals</title>
-  <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     :root {
       --bg:       #09090b;
@@ -522,12 +522,7 @@ function initSpyChart() {
     borderUpColor: '#22c55e', borderDownColor: '#ef4444',
     wickUpColor: '#22c55e', wickDownColor: '#ef4444',
   };
-  // lightweight-charts v5 replaced addCandlestickSeries() with addSeries(CandlestickSeries, ...)
-  if (typeof spyChart.addCandlestickSeries === 'function') {
-    spySeries = spyChart.addCandlestickSeries(candleOpts);
-  } else {
-    spySeries = spyChart.addSeries(LightweightCharts.CandlestickSeries, candleOpts);
-  }
+  spySeries = spyChart.addCandlestickSeries(candleOpts);
   window.addEventListener('resize', () => {
     if (spyChart && box.clientWidth) spyChart.resize(box.clientWidth, 220);
   });
