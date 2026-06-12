@@ -267,6 +267,11 @@
       padding: 2px 7px; border-radius: 8px; letter-spacing: 0.04em;
     }
     .tp-sym { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding-right: 64px; }
+    .tp-price { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; display: flex; align-items: baseline; gap: 6px; }
+    .tp-price .tp-pct { font-size: 12px; font-weight: 700; }
+    .tp-price .tp-pct.green { color: var(--green); }
+    .tp-price .tp-pct.red { color: var(--red); }
+    .tp-reason { font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
     .tp-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 
     /* ── Penny card ── */
@@ -618,6 +623,8 @@ function topPickCard(s) {
   <div class="tp-card" onclick="openChart('${sym}',false)">
     <span class="tp-toppick-badge">★ Top Pick</span>
     <div class="tp-sym">${sym} ${badge(s.label)}</div>
+    ${s.price != null ? `<div class="tp-price">${fmt(s.price,false)} ${s.pct != null ? `<span class="tp-pct ${s.pct >= 0 ? 'green' : 'red'}">${s.pct >= 0 ? '+' : ''}${s.pct}%</span>` : ''}</div>` : ''}
+    ${(s.reasons && s.reasons.length) ? `<div class="tp-reason">📌 ${s.reasons.slice(0,2).join(' · ')}</div>` : ''}
     <div class="tp-chips">
       ${s.setup_type ? `<span class="chip chip-setup">${s.setup_type}</span>` : ''}
       ${s.risk_band ? `<span class="chip ${riskCls}">${s.risk_band} risk</span>` : ''}
