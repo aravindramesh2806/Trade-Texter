@@ -187,6 +187,21 @@ def calc_adx(hist, p=14):
     adx = dx.rolling(p).mean()
     return sf(adx.iloc[-1])
 
+def calc_weekly_trend(hist):
+    """Resample daily closes to weekly and compare price to its 10-week EMA.
+    Used for multi-timeframe confirmation — a daily BUY against a weekly
+    downtrend (or vice versa) is lower-conviction than one that agrees."""
+    try:
+        if len(hist) < 70: return None
+        wk = hist["Close"].resample("W").last().dropna()
+        if len(wk) < 10: return None
+        ema10 = wk.ewm(span=10, adjust=False).mean()
+        price, ema = sf(wk.iloc[-1]), sf(ema10.iloc[-1])
+        if price is None or ema is None: return None
+        return "up" if price > ema else "down"
+    except Exception:
+        return None
+
 # ── Batch download — parallel individual fetches with per-ticker timeout ──
 def _fetch_one(sym, ticker_sym, period):
     """Fetch one ticker. Returns (sym, DataFrame) or (sym, None)."""
@@ -215,13 +230,13 @@ def batch_dl(symbols, period="1y", ns=False, timeout=20):
     return out
 
 # ── Score a stock from its history DataFrame ──────────────────────
-def score(sym, hist, ns=False):
+def score(sym, hist, ns=False, check_recency=True):
     try:
         if hist is None or hist.empty or len(hist) < 30: return None
         last = hist.index[-1]
         if hasattr(last,"tzinfo") and last.tzinfo:
             last = last.replace(tzinfo=None)
-        if (datetime.now()-last).days > 5: return None
+        if check_recency and (datetime.now()-last).days > 5: return None
 
         close = hist["Close"].dropna()
         if len(close) < 30: return None
@@ -237,6 +252,7 @@ def score(sym, hist, ns=False):
         res     = sf(hist["High"].tail(60).max())
         atr     = calc_atr(hist)
         adx     = calc_adx(hist)
+        weekly_trend = calc_weekly_trend(hist)
         avgvol  = sf(hist["Volume"].tail(20).mean())
         curvol  = sf(hist["Volume"].iloc[-1])
         vr      = (curvol/avgvol) if (avgvol and avgvol>0 and curvol) else None
@@ -306,6 +322,7 @@ def score(sym, hist, ns=False):
             "profit_pct":round((res-price)/price*100,1),
             "atr":round(atr,2) if atr else None,
             "adx":round(adx,1) if adx else None,
+            "weekly_trend":weekly_trend,
             "vol_ratio":round(vr,1) if vr else None,
             "ai_signal":ai,"reasons":rs,
         }
@@ -388,6 +405,7 @@ def get_fundamentals_batch(symbols, ns=False, timeout=8):
                     "div_yield": info.get("dividendYield"),
                     "volume":    info.get("volume") or info.get("regularMarketVolume"),
                     "prev_close": info.get("previousClose"),
+                    "sector":    info.get("sector"),
                 }
             except Exception as e:
                 if attempt == 0:
@@ -409,6 +427,94 @@ def get_fundamentals_batch(symbols, ns=False, timeout=8):
                     log.warning(f"fundamentals future error: {e}")
     log.info(f"Fundamentals: {len(out)}/{len(symbols)} fetched ({len(symbols)-len(to_fetch)} cached)")
     return out
+
+# ── News headlines + earnings date (free, no API key — yfinance) ──
+_NEWS_CACHE = {}
+_NEWS_CACHE_TTL = 30 * 60  # seconds
+
+def get_news_earnings_batch(symbols, ns=False, timeout=8):
+    """Fetch top headlines + next earnings date for a small set of symbols."""
+    if not symbols: return {}
+    fetch_map = {s: (s+".NS" if ns and not s.endswith(".NS") else s) for s in symbols}
+    out = {}
+    now = time.time()
+    to_fetch = {}
+    for sym, tsym in fetch_map.items():
+        cached = _NEWS_CACHE.get(tsym)
+        if cached and (now - cached[0]) < _NEWS_CACHE_TTL:
+            out[sym] = cached[1]
+        else:
+            to_fetch[sym] = tsym
+
+    def _one(sym, tsym):
+        try:
+            t = yf.Ticker(tsym)
+            headlines = []
+            try:
+                for n in (t.news or [])[:3]:
+                    content = n.get("content", n) if isinstance(n, dict) else {}
+                    title = content.get("title") or n.get("title")
+                    if title: headlines.append(title)
+            except Exception:
+                pass
+            earnings_date = None
+            try:
+                cal = t.calendar
+                if isinstance(cal, dict):
+                    ed = cal.get("Earnings Date")
+                    if isinstance(ed, (list, tuple)) and ed:
+                        earnings_date = str(ed[0])
+                    elif ed:
+                        earnings_date = str(ed)
+            except Exception:
+                pass
+            return sym, {"headlines": headlines, "earnings_date": earnings_date}
+        except Exception as e:
+            log.debug(f"news/earnings {sym}: {e}")
+            return sym, {"headlines": [], "earnings_date": None}
+
+    if to_fetch:
+        with ThreadPoolExecutor(max_workers=min(4, len(to_fetch))) as ex:
+            futures = {ex.submit(_one, sym, ts): sym for sym, ts in to_fetch.items()}
+            for fut in as_completed(futures, timeout=timeout * len(to_fetch) * 2):
+                try:
+                    sym, data = fut.result(timeout=timeout * 2)
+                    out[sym] = data
+                    _NEWS_CACHE[fetch_map[sym]] = (now, data)
+                except Exception as e:
+                    log.debug(f"news future error: {e}")
+    return out
+
+# ── Reddit "buzz" via ApeWisdom — free, keyless public API ─────────
+# Covers ~30 popular subreddits (wallstreetbets, stocks, investing, etc.)
+# Only useful for US tickers.
+_REDDIT_CACHE = {"data": None, "ts": 0}
+_REDDIT_CACHE_TTL = 30 * 60  # seconds
+
+def get_reddit_buzz():
+    now = time.time()
+    if _REDDIT_CACHE["data"] is not None and (now - _REDDIT_CACHE["ts"]) < _REDDIT_CACHE_TTL:
+        return _REDDIT_CACHE["data"]
+    out = {}
+    try:
+        for page in (1, 2):
+            url = f"https://apewisdom.io/api/v1.0/filter/all-stocks/page/{page}"
+            with urllib.request.urlopen(url, timeout=8) as resp:
+                data = json.loads(resp.read().decode())
+            for item in data.get("results", []):
+                tk = item.get("ticker")
+                if tk:
+                    out[tk] = {
+                        "mentions": item.get("mentions"),
+                        "rank": item.get("rank"),
+                        "mentions_24h_ago": item.get("mentions_24h_ago"),
+                    }
+        _REDDIT_CACHE["data"] = out
+        _REDDIT_CACHE["ts"] = now
+        log.info(f"Reddit buzz: {len(out)} tickers")
+    except Exception as e:
+        log.debug(f"reddit buzz: {e}")
+    return _REDDIT_CACHE["data"] or {}
 
 # ── Plain-English narrative for "what's happening" ────────────────
 def generate_narrative(s, mkt_ctx=None):
@@ -445,7 +551,7 @@ def generate_narrative(s, mkt_ctx=None):
     return " ".join(parts)
 
 # ── Richer signal schema ──────────────────────────────────────────
-def build_signal(s, fundamentals=None, mkt_ctx=None):
+def build_signal(s, fundamentals=None, mkt_ctx=None, prev=None, extra=None):
     """Take an existing signal dict and return it with all original fields
     PLUS the richer beginner-friendly fields. Never removes existing fields."""
     score = s.get("score", 0)
@@ -511,6 +617,33 @@ def build_signal(s, fundamentals=None, mkt_ctx=None):
     eta_1_days, target_1_date = _eta(target_1)
     eta_2_days, target_2_date = _eta(target_2)
 
+    # position sizing — risk-based. risk_per_share is how much you lose per
+    # share if stopped out; shares_per_100_risk is how many shares that buys
+    # you per $100 of risk capital (scale linearly for your own risk budget).
+    risk_per_share = round(abs(safe_price - stop_loss), 2) if stop_loss else None
+    shares_per_100_risk = int(100 // risk_per_share) if risk_per_share and risk_per_share > 0 else None
+
+    # multi-timeframe confirmation — does the weekly trend agree with today's
+    # daily signal, or is this a counter-trend bounce/pullback?
+    weekly_trend = s.get("weekly_trend")
+    mtf_aligned, mtf_note = None, None
+    if weekly_trend:
+        if "BUY" in label:
+            mtf_aligned = (weekly_trend == "up")
+            mtf_note = ("Weekly trend also up — daily signal confirmed" if mtf_aligned
+                         else "Weekly trend is down — daily BUY may be a bounce, lower conviction")
+        elif "SELL" in label:
+            mtf_aligned = (weekly_trend == "down")
+            mtf_note = ("Weekly trend also down — daily signal confirmed" if mtf_aligned
+                         else "Weekly trend is up — daily SELL may be a pullback, lower conviction")
+
+    # signal-change diff vs the previous scan
+    signal_change, score_change = None, None
+    if prev:
+        score_change = score - prev.get("score", score)
+        if prev.get("label") != label:
+            signal_change = f"{prev.get('label')} → {label}"
+
     # beginner note
     if "BUY" in label:
         eta_note = f" (around {eta_1_days} trading days, ~{target_1_date})" if eta_1_days else ""
@@ -524,11 +657,13 @@ def build_signal(s, fundamentals=None, mkt_ctx=None):
                          f"${resistance:.2f} or below ${support:.2f} before acting.")
 
     fundamentals = fundamentals or {}
+    extra = extra or {}
     merged = {**s, **fundamentals}
 
     return {
         **s,
         **fundamentals,
+        **extra,
         "ticker": s.get("symbol", ""),
         "signal": label,
         "setup_type": setup_type,
@@ -542,6 +677,12 @@ def build_signal(s, fundamentals=None, mkt_ctx=None):
         "target_2_eta_days": eta_2_days,
         "target_2_date": target_2_date,
         "invalidation": stop_loss,
+        "risk_per_share": risk_per_share,
+        "shares_per_100_risk": shares_per_100_risk,
+        "mtf_aligned": mtf_aligned,
+        "mtf_note": mtf_note,
+        "signal_change": signal_change,
+        "score_change": score_change,
         "beginner_note": beginner_note,
         "narrative": generate_narrative(merged, mkt_ctx),
     }
@@ -567,6 +708,26 @@ _cache = {
 _top_picks_cache = {
     "us": {"suppressed":False,"reason":None,"picks":[],"last_updated":None},
 }
+# Previous scan's {symbol: {"label":..., "score":...}} — used to compute
+# signal-change diffs (e.g. "HOLD → BUY") between consecutive scans.
+_PREV_SIGNALS = {"us": {}, "india": {}}
+
+def _sector_exposure(signals):
+    """% of BUY signals concentrated in each sector, plus a concentration warning."""
+    buys = [s for s in signals if "BUY" in s.get("label","")]
+    counts = {}
+    for s in buys:
+        sec = s.get("sector") or "Unknown"
+        counts[sec] = counts.get(sec, 0) + 1
+    total = len(buys)
+    pct = {k: round(v/total*100,1) for k,v in counts.items()} if total else {}
+    warning = None
+    if total >= 2:
+        for sec, p in pct.items():
+            if p > 50 and sec != "Unknown":
+                warning = f"{p:.0f}% of current BUY signals are in {sec} — consider diversifying"
+                break
+    return {"sector_exposure": pct, "sector_concentration_warning": warning}
 
 def run_us_scan():
     log.info("=== US scan start ===")
@@ -581,21 +742,28 @@ def run_us_scan():
         ph = batch_dl(port, "1y")
         mkt_ctx = ("S&P 500", spy_pct, bearish)
         fund = get_fundamentals_batch(port)
+        news = get_news_earnings_batch(port)
+        reddit = get_reddit_buzz()
         signals = []
         for sym in port:
             r = score(sym, ph.get(sym))
             if r:
                 if bearish and "BUY" in r["label"]:
                     r["label"]="HOLD"; r["why"]=f"Suppressed — SPY down {spy_pct}%"
-                r = build_signal(r, fund.get(sym), mkt_ctx)
+                prev = _PREV_SIGNALS["us"].get(sym)
+                extra = dict(news.get(sym) or {})
+                if sym in reddit: extra["reddit"] = reddit[sym]
+                r = build_signal(r, fund.get(sym), mkt_ctx, prev=prev, extra=extra)
                 signals.append(r)
+                _PREV_SIGNALS["us"][sym] = {"label": r["label"], "score": r["score"]}
                 log.info(f"  {sym}: {r['label']}  score={r['score']}")
             else:
                 log.warning(f"  {sym}: no signal")
 
         with _lock:
             _cache["us"].update({"signals":signals,"spy_pct":spy_pct,"market_bearish":bearish,
-                                  "last_updated":datetime.now().isoformat(),"scanning":True})
+                                  "last_updated":datetime.now().isoformat(),"scanning":True,
+                                  **_sector_exposure(signals)})
         log.info(f"Portfolio done ({len(signals)}). Downloading watchlist...")
 
         # Phase 2 — watchlist (batch)
@@ -642,21 +810,25 @@ def run_india_scan():
         ph = batch_dl(port, "1y", ns=True)
         mkt_ctx = ("NIFTY", nifty_pct, bearish)
         fund = get_fundamentals_batch(port, ns=True)
+        news = get_news_earnings_batch(port, ns=True)
         signals = []
         for sym in port:
             r = score(sym, ph.get(sym), ns=True)
             if r:
                 if bearish and "BUY" in r["label"]:
                     r["label"]="HOLD"; r["why"]=f"Suppressed — NIFTY down {nifty_pct}%"
-                r = build_signal(r, fund.get(sym), mkt_ctx)
+                prev = _PREV_SIGNALS["india"].get(sym)
+                r = build_signal(r, fund.get(sym), mkt_ctx, prev=prev, extra=news.get(sym))
                 signals.append(r)
+                _PREV_SIGNALS["india"][sym] = {"label": r["label"], "score": r["score"]}
                 log.info(f"  {sym}: {r['label']}")
             else:
                 log.warning(f"  {sym}: no signal")
 
         with _lock:
             _cache["india"].update({"signals":signals,"nifty_pct":nifty_pct,"market_bearish":bearish,
-                                     "last_updated":datetime.now().isoformat(),"scanning":True})
+                                     "last_updated":datetime.now().isoformat(),"scanning":True,
+                                     **_sector_exposure(signals)})
         log.info(f"India portfolio done ({len(signals)}). Downloading watchlist...")
 
         wh = batch_dl(INDIA_WATCHLIST, "1y", ns=True)
@@ -733,6 +905,43 @@ def run_top_picks_scan():
     except Exception as e:
         log.error(f"Top picks scan crashed: {e}", exc_info=True)
         return None
+
+# ── Backtest — replay the scoring logic over history ──────────────
+def run_backtest(sym, ns=False, period="2y", hold_days=10):
+    """Every 5 trading days, compute the signal using only data available up
+    to that point, then check the price return `hold_days` later. Reports
+    count / avg return / win rate per label. This is a sanity check on the
+    algorithm, not a guarantee of future performance."""
+    try:
+        tsym = sym + ".NS" if ns and not sym.endswith(".NS") else sym
+        hist = yf.Ticker(tsym).history(period=period, auto_adjust=True)
+        if hist is None or len(hist) < 250:
+            return {"error": "not enough history for a meaningful backtest"}
+        closes = hist["Close"].values
+        results = {"STRONG BUY":[], "BUY":[], "HOLD":[], "SELL":[], "STRONG SELL":[]}
+        for i in range(200, len(hist)-hold_days, 5):
+            window = hist.iloc[:i+1]
+            r = score(sym, window, ns=ns, check_recency=False)
+            if not r: continue
+            entry, exitp = closes[i], closes[i+hold_days]
+            if entry == 0: continue
+            ret = (exitp-entry)/entry*100
+            results[r["label"]].append(ret)
+        summary = {}
+        for label, rets in results.items():
+            if not rets: continue
+            if "BUY" in label:  wins = sum(1 for x in rets if x > 0)
+            elif "SELL" in label: wins = sum(1 for x in rets if x < 0)
+            else: wins = None
+            summary[label] = {
+                "count": len(rets),
+                "avg_return_pct": round(sum(rets)/len(rets), 2),
+                "win_rate_pct": round(wins/len(rets)*100, 1) if wins is not None else None,
+            }
+        return {"symbol": sym, "period": period, "hold_days": hold_days, "results": summary}
+    except Exception as e:
+        log.warning(f"backtest {sym}: {e}")
+        return {"error": str(e)}
 
 def background_loop():
     while True:
@@ -850,6 +1059,7 @@ class Handler(SimpleHTTPRequestHandler):
         elif p.path=="/api/chart":   self._chart(p)
         elif p.path=="/api/config":  self._json(200,read_config())
         elif p.path=="/api/scan":    self._trigger_scan(p)
+        elif p.path=="/api/backtest": self._backtest(p)
         elif p.path=="/api/notify-test": self._test_notify()
         else: super().do_GET()
 
@@ -904,6 +1114,17 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception as e:
             log.warning(f"chart error {sym} {rng}: {e}")
             self._json(500,{"error":str(e),"candles":[]})
+
+    def _backtest(self,p):
+        q   = parse_qs(p.query)
+        sym = q.get("symbol",[""])[0].strip().upper()
+        mkt = q.get("market",["us"])[0].lower()
+        hold = q.get("hold_days",["10"])[0]
+        if not sym: self._json(400,{"error":"symbol required"}); return
+        try: hold_days = max(1, min(30, int(hold)))
+        except Exception: hold_days = 10
+        result = run_backtest(sym, ns=(mkt=="india"), hold_days=hold_days)
+        self._json(200 if "error" not in result else 500, result)
 
     def _trigger_scan(self,p):
         mkt = parse_qs(p.query).get("market",["both"])[0].lower()

@@ -229,6 +229,21 @@
     .beginner-note { display: flex; gap: 7px; align-items: flex-start; font-size: 11px; line-height: 1.5; color: var(--text); background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.18); border-radius: 7px; padding: 8px 10px; margin-bottom: 10px; }
     .bn-icon { flex-shrink: 0; }
 
+    /* ── New: signal-change / multi-timeframe / sizing / news extras ── */
+    .card-extra { margin-bottom: 10px; }
+    .extra-row { font-size: 11px; line-height: 1.5; border-radius: 7px; padding: 6px 9px; margin-bottom: 6px; background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.18); color: var(--text); }
+    .extra-row.warn { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.22); color: #fbbf24; }
+    .extra-row.change { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.22); color: #d8b4fe; font-weight: 600; }
+    .extra-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+    .meta-chip { font-size: 10px; font-weight: 500; color: var(--muted); background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 3px 7px; }
+    .extra-news { font-size: 11px; color: var(--muted); line-height: 1.5; margin-bottom: 6px; }
+    .btn-backtest { font-size: 11px; font-weight: 500; color: var(--blue2); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; cursor: pointer; }
+    .btn-backtest:hover { border-color: var(--border2); }
+    .backtest-result { font-size: 11px; line-height: 1.6; color: var(--muted); margin-top: 6px; }
+    .backtest-result table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    .backtest-result td, .backtest-result th { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--border); }
+    .sector-warn { font-size: 11px; color: #fbbf24; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.22); border-radius: 7px; padding: 6px 10px; margin: 0 24px 10px; }
+
     /* ── Best pick card ── */
     .best-section { padding: 20px 24px 0; }
     .best-card {
@@ -789,6 +804,7 @@ function topPickCard(s) {
       ${s.invalidation != null ? `<div class="tg"><label>Invalidation</label><span>${fmt(s.invalidation,false)}</span></div>` : ''}
     </div>
     ${s.beginner_note ? `<div class="beginner-note"><span class="bn-icon">💡</span><span>${s.beginner_note}</span></div>` : ''}
+    ${cardExtras(s, false)}
   </div>`;
 }
 
@@ -921,6 +937,11 @@ function renderContent(market, data) {
 
   let html = '';
 
+  // Sector concentration warning
+  if (data.sector_concentration_warning) {
+    html += `<div class="sector-warn">⚠️ ${data.sector_concentration_warning}</div>`;
+  }
+
   // Best pick
   if (best) {
     const profPct = best.profit_pct ?? ((best.resistance - best.price) / best.price * 100).toFixed(1);
@@ -1029,7 +1050,53 @@ function sigCard(s, india) {
       <div class="cs ${scrCls}"><label>Score</label><span>${s.score}</span></div>
       <div class="cs ${volCls}"><label>Volume</label><span>${s.vol_ratio ? s.vol_ratio+'x' : '—'}</span></div>
     </div>
+    ${cardExtras(s, india)}
   </div>`;
+}
+
+// ── Shared "extras" block: signal-change, multi-timeframe, sizing, news, backtest ──
+function cardExtras(s, india) {
+  const hasExtra = s.signal_change || s.mtf_note || s.sector || s.shares_per_100_risk || s.earnings_date || (s.headlines && s.headlines.length) || s.reddit?.mentions;
+  if (!hasExtra && !s.symbol) return '';
+  return `<div class="card-extra">
+    ${s.signal_change ? `<div class="extra-row change">🔄 Signal changed: ${s.signal_change}</div>` : ''}
+    ${s.mtf_note ? `<div class="extra-row ${s.mtf_aligned===false?'warn':''}">${s.mtf_aligned ? '✓' : '⚠️'} ${s.mtf_note}</div>` : ''}
+    ${(s.sector || s.shares_per_100_risk || s.earnings_date || s.reddit?.mentions) ? `<div class="extra-meta">
+      ${s.sector ? `<span class="meta-chip">${s.sector}</span>` : ''}
+      ${s.shares_per_100_risk ? `<span class="meta-chip">~${s.shares_per_100_risk} sh per $100 risk</span>` : ''}
+      ${s.earnings_date ? `<span class="meta-chip">📅 Earnings ~${String(s.earnings_date).slice(0,10)}</span>` : ''}
+      ${s.reddit?.mentions ? `<span class="meta-chip">👽 ${s.reddit.mentions} Reddit mentions (#${s.reddit.rank})</span>` : ''}
+    </div>` : ''}
+    ${(s.headlines && s.headlines.length) ? `<div class="extra-news">📰 ${s.headlines[0]}</div>` : ''}
+    <button class="btn-backtest" onclick="event.stopPropagation(); runBacktest('${s.symbol}', ${india}, this)">📊 Backtest this signal</button>
+    <div class="backtest-result"></div>
+  </div>`;
+}
+
+// ── Backtest: replay scoring logic over history, show win-rate by label ──
+async function runBacktest(symbol, india, btn) {
+  const out = btn.nextElementSibling;
+  btn.disabled = true; btn.textContent = '⏳ Running backtest…';
+  out.innerHTML = '';
+  try {
+    const r = await fetch(`/api/backtest?symbol=${symbol}&market=${india?'india':'us'}&hold_days=10`);
+    const data = await r.json();
+    if (data.error) { out.innerHTML = `<span style="color:var(--red)">${data.error}</span>`; }
+    else {
+      const rows = Object.entries(data.results || {});
+      if (!rows.length) { out.innerHTML = `<span>No historical occurrences of this signal found.</span>`; }
+      else {
+        out.innerHTML = `<div>Past occurrences of each signal, ${data.hold_days}-trading-day forward return (${data.period} history):</div>
+        <table><tr><th>Signal</th><th>Times seen</th><th>Avg return</th><th>Win rate</th></tr>
+        ${rows.map(([label,r]) => `<tr><td>${label}</td><td>${r.count}</td><td style="color:${r.avg_return_pct>=0?'var(--green)':'var(--red)'}">${r.avg_return_pct>=0?'+':''}${r.avg_return_pct}%</td><td>${r.win_rate_pct!=null? r.win_rate_pct+'%':'—'}</td></tr>`).join('')}
+        </table>
+        <div style="margin-top:4px;color:var(--muted2)">Past performance is not a guarantee of future results.</div>`;
+      }
+    }
+  } catch(e) {
+    out.innerHTML = `<span style="color:var(--red)">Backtest failed: ${e}</span>`;
+  }
+  btn.disabled = false; btn.textContent = '📊 Backtest this signal';
 }
 
 // ── Penny card ────────────────────────────────────────────────────
