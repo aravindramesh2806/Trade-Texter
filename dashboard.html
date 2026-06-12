@@ -103,20 +103,25 @@
     .chart-tab { padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--muted); border: 1px solid var(--border); background: var(--surface2); border-radius: 6px; transition: all 0.15s; }
     .chart-tab:hover { color: var(--text); border-color: var(--border2); }
     .chart-tab.active { color: var(--text); background: var(--surface3); border-color: var(--green); }
-    .chart-box { position: relative; width: 100%; height: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; padding: 20px 24px; box-sizing: border-box; display: flex; align-items: center; gap: 28px; }
-    .chart-status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--muted); pointer-events: none; }
-    .trend-price-wrap { flex: 0 0 auto; min-width: 130px; }
-    .trend-price { font-size: 30px; font-weight: 800; letter-spacing: -0.01em; }
-    .trend-pct { font-size: 15px; font-weight: 700; margin-top: 4px; }
-    .trend-pct.green { color: var(--green); }
-    .trend-pct.red { color: var(--red); }
-    .trend-spark { flex: 1 1 auto; height: 100%; min-width: 0; }
-    .trend-spark svg { width: 100%; height: 100%; display: block; }
+    .chart-status { font-size: 12px; color: var(--muted); padding: 10px 0; text-align: center; }
+    .assets-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .asset-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; box-sizing: border-box; height: 150px; display: flex; flex-direction: column; overflow: hidden; }
+    .ac-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .ac-name { font-size: 13px; font-weight: 700; color: var(--text); }
+    .ac-pct { font-size: 13px; font-weight: 700; white-space: nowrap; }
+    .ac-pct.green { color: var(--green); }
+    .ac-pct.red { color: var(--red); }
+    .ac-price { font-size: 18px; font-weight: 700; color: var(--text); margin-top: 2px; }
+    .ac-delta { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .ac-spark { flex: 1 1 auto; min-height: 0; margin: 6px -16px -14px; }
+    .ac-spark svg { width: 100%; height: 100%; display: block; }
+    @media (max-width: 900px) {
+      .assets-grid { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 600px) {
       .chart-wrap { padding: 12px 14px 0; }
-      .chart-box { height: 140px; padding: 16px; gap: 16px; flex-direction: column; align-items: flex-start; }
-      .trend-spark { width: 100%; }
-      .trend-price { font-size: 24px; }
+      .assets-grid { grid-template-columns: 1fr; gap: 10px; }
+      .asset-card { height: 130px; }
     }
 
     /* ── Stats summary bar ── */
@@ -405,7 +410,7 @@
   <div class="mood-bar" id="us-mood"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
   <div class="chart-wrap">
     <div class="chart-head">
-      <div class="chart-title">📈 Market Trend <span class="ct-sub" id="trend-sub">SPY (S&amp;P 500) — today</span></div>
+      <div class="chart-title">📊 Top Assets <span class="ct-sub" id="trend-sub">Live market overview — today</span></div>
       <div class="chart-tabs" id="trend-tabs">
         <div class="chart-tab active" data-range="1d" onclick="setTrendRange('1d')">1D</div>
         <div class="chart-tab" data-range="1w" onclick="setTrendRange('1w')">1W</div>
@@ -415,14 +420,8 @@
         <div class="chart-tab" data-range="5y" onclick="setTrendRange('5y')">5Y</div>
       </div>
     </div>
-    <div class="chart-box" id="trend-box">
-      <div class="trend-price-wrap">
-        <div class="trend-price" id="trend-price">—</div>
-        <div class="trend-pct" id="trend-pct"></div>
-      </div>
-      <div class="trend-spark"><svg id="trend-svg" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div>
-      <div class="chart-status" id="trend-status">Loading…</div>
-    </div>
+    <div class="assets-grid" id="assets-grid"></div>
+    <div class="chart-status" id="trend-status" style="display:none">Loading…</div>
   </div>
   <div class="stats-bar" id="us-stats"></div>
   <div id="us-toppicks"></div>
@@ -552,9 +551,15 @@ schedulePoll();
 loadMarketTrend();
 setInterval(loadMarketTrend, 60000);
 
-// ── Market trend sparkline ──────────────────────────────────────────
+// ── Top Assets ──────────────────────────────────────────────────────
 let trendRange = '1d';
 const TREND_SUB = { '1d':'today', '1w':'past week', '1mo':'past month', '6mo':'past 6 months', '1y':'past year', '5y':'past 5 years' };
+const TOP_ASSETS = [
+  { symbol: 'SPY', label: 'S&P 500' },
+  { symbol: 'QQQ', label: 'NASDAQ 100' },
+  { symbol: 'DIA', label: 'Dow Jones' },
+  { symbol: '^VIX', label: 'VIX' },
+];
 
 function setTrendRange(rng) {
   if (rng === trendRange) return;
@@ -563,34 +568,67 @@ function setTrendRange(rng) {
   loadMarketTrend();
 }
 
+function assetCardSkeleton(asset) {
+  return `
+    <div class="asset-card" data-symbol="${asset.symbol}">
+      <div class="ac-head">
+        <div class="ac-name">${asset.label}</div>
+        <div class="ac-pct" id="ac-pct-${asset.symbol}">—</div>
+      </div>
+      <div class="ac-price" id="ac-price-${asset.symbol}">—</div>
+      <div class="ac-delta" id="ac-delta-${asset.symbol}"></div>
+      <div class="ac-spark"><svg viewBox="0 0 300 90" preserveAspectRatio="none" id="ac-svg-${asset.symbol}"></svg></div>
+    </div>`;
+}
+
 async function loadMarketTrend() {
+  const grid   = document.getElementById('assets-grid');
   const status = document.getElementById('trend-status');
-  const priceEl = document.getElementById('trend-price');
-  const pctEl   = document.getElementById('trend-pct');
-  const subEl   = document.getElementById('trend-sub');
-  const svg     = document.getElementById('trend-svg');
-  if (status) { status.textContent = 'Loading…'; status.style.display = 'flex'; }
-  if (subEl) subEl.textContent = `SPY (S&P 500) — ${TREND_SUB[trendRange] || ''}`;
+  const subEl  = document.getElementById('trend-sub');
+  if (subEl) subEl.textContent = `Live market overview — ${TREND_SUB[trendRange] || ''}`;
+
+  if (!grid.children.length) {
+    grid.innerHTML = TOP_ASSETS.map(assetCardSkeleton).join('');
+  }
+  if (status) status.style.display = 'none';
+
+  await Promise.all(TOP_ASSETS.map(asset => loadAssetCard(asset)));
+}
+
+async function loadAssetCard(asset) {
+  const pctEl   = document.getElementById(`ac-pct-${asset.symbol}`);
+  const priceEl = document.getElementById(`ac-price-${asset.symbol}`);
+  const deltaEl = document.getElementById(`ac-delta-${asset.symbol}`);
+  const svg     = document.getElementById(`ac-svg-${asset.symbol}`);
   try {
-    const r = await fetch(`/api/chart?symbol=SPY&range=${trendRange}`);
+    const r = await fetch(`/api/chart?symbol=${encodeURIComponent(asset.symbol)}&range=${trendRange}`);
     if (!r.ok) throw new Error('bad response');
     const d = await r.json();
     const candles = d.candles || [];
-    if (!candles.length) { if (status) { status.textContent = 'No data available'; status.style.display = 'flex'; } return; }
+    if (!candles.length) {
+      if (pctEl) pctEl.textContent = '—';
+      if (priceEl) priceEl.textContent = 'No data';
+      if (deltaEl) deltaEl.textContent = '';
+      svg.innerHTML = '';
+      return;
+    }
 
     const closes = candles.map(c => c.close);
     const first = closes[0];
     const last  = closes[closes.length - 1];
-    const pct   = first ? ((last - first) / first) * 100 : 0;
+    const delta = last - first;
+    const pct   = first ? (delta / first) * 100 : 0;
     const up    = last >= first;
+    const decimals = last >= 1000 ? 2 : (last < 50 ? 2 : 2);
 
-    if (priceEl) priceEl.textContent = `$${last.toFixed(2)}`;
+    if (priceEl) priceEl.textContent = `$${last.toLocaleString('en-US', {minimumFractionDigits:decimals, maximumFractionDigits:decimals})}`;
     if (pctEl) {
-      pctEl.textContent = `${up ? '▲' : '▼'} ${up ? '+' : ''}${pct.toFixed(2)}%`;
-      pctEl.className = `trend-pct ${up ? 'green' : 'red'}`;
+      pctEl.textContent = `${up ? '↗' : '↘'} ${up ? '+' : ''}${pct.toFixed(2)}%`;
+      pctEl.className = `ac-pct ${up ? 'green' : 'red'}`;
     }
+    if (deltaEl) deltaEl.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`;
 
-    // build sparkline path
+    // build sparkline path with dashed baseline at first value
     const min = Math.min(...closes), max = Math.max(...closes);
     const range = (max - min) || 1;
     const w = 300, h = 90, pad = 4;
@@ -599,13 +637,18 @@ async function loadMarketTrend() {
       const y = h - pad - ((c - min) / range) * (h - pad * 2);
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     });
+    const baseY = (h - pad - ((first - min) / range) * (h - pad * 2)).toFixed(2);
     const color = up ? '#22c55e' : '#ef4444';
     const areaPts = `${pad},${h-pad} ${pts.join(' ')} ${w-pad},${h-pad}`;
-    svg.innerHTML = `<polygon points="${areaPts}" fill="${color}" opacity="0.08"/><polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-
-    if (status) status.style.display = 'none';
+    svg.innerHTML = `
+      <line x1="${pad}" y1="${baseY}" x2="${w-pad}" y2="${baseY}" stroke="#555" stroke-width="1" stroke-dasharray="3,3"/>
+      <polygon points="${areaPts}" fill="${color}" opacity="0.10"/>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
   } catch (e) {
-    if (status) { status.textContent = 'Could not load market trend'; status.style.display = 'flex'; }
+    if (pctEl) pctEl.textContent = '—';
+    if (priceEl) priceEl.textContent = 'Error';
+    if (deltaEl) deltaEl.textContent = '';
+    svg.innerHTML = '';
   }
 }
 
