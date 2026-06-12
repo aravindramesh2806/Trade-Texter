@@ -316,8 +316,73 @@ def score_penny(sym, hist, max_price=5.0):
     except:
         return None
 
+# ── Fundamentals (name, market cap, P/E, dividend yield, volume) ──
+def get_fundamentals_batch(symbols, ns=False, timeout=8):
+    """Fetch lightweight company info for a small set of symbols in parallel."""
+    if not symbols: return {}
+    fetch_map = {s: (s+".NS" if ns and not s.endswith(".NS") else s) for s in symbols}
+    out = {}
+    def _one(sym, tsym):
+        try:
+            info = yf.Ticker(tsym).get_info()
+            return sym, {
+                "name":      info.get("shortName") or info.get("longName") or sym,
+                "exchange":  info.get("exchange") or ("NSE" if ns else ""),
+                "market_cap": info.get("marketCap"),
+                "pe_ratio":  info.get("trailingPE"),
+                "div_yield": info.get("dividendYield"),
+                "volume":    info.get("volume") or info.get("regularMarketVolume"),
+                "prev_close": info.get("previousClose"),
+            }
+        except Exception as e:
+            log.debug(f"fundamentals {sym}: {e}")
+            return sym, None
+    with ThreadPoolExecutor(max_workers=min(8, len(symbols))) as ex:
+        futures = {ex.submit(_one, sym, ts): sym for sym, ts in fetch_map.items()}
+        for fut in as_completed(futures, timeout=timeout * len(symbols)):
+            try:
+                sym, data = fut.result(timeout=timeout)
+                if data: out[sym] = data
+            except Exception as e:
+                log.debug(f"fundamentals future error: {e}")
+    return out
+
+# ── Plain-English narrative for "what's happening" ────────────────
+def generate_narrative(s, mkt_ctx=None):
+    sym    = s.get("symbol","")
+    name   = s.get("name") or sym
+    pct    = s.get("pct",0) or 0
+    reasons= s.get("reasons", [])
+    label  = s.get("label","HOLD")
+
+    if pct > 0.05:   direction = f"is up {pct:.1f}% today"
+    elif pct < -0.05: direction = f"is down {abs(pct):.1f}% today"
+    else:            direction = "is roughly flat today"
+
+    parts = [f"{name} ({sym}) {direction}."]
+    if reasons:
+        parts.append("What's driving it: " + ", ".join(reasons[:2]) + ".")
+
+    if mkt_ctx:
+        idx_name, idx_pct, bearish = mkt_ctx
+        if idx_pct is not None:
+            if bearish:
+                parts.append(f"Broader market is weak — {idx_name} {idx_pct:+.1f}% — so signals are being read cautiously.")
+            elif idx_pct >= 0.5:
+                parts.append(f"It's also riding a broadly strong tape ({idx_name} {idx_pct:+.1f}%).")
+            elif idx_pct <= -0.5:
+                parts.append(f"That's despite a soft overall market ({idx_name} {idx_pct:+.1f}%).")
+
+    if "STRONG BUY" in label: parts.append("Setup: strong buy signal.")
+    elif "BUY" in label:      parts.append("Setup: leans buy.")
+    elif "STRONG SELL" in label: parts.append("Setup: strong sell signal.")
+    elif "SELL" in label:     parts.append("Setup: leans sell.")
+    else:                     parts.append("Setup: no clear edge — hold/watch.")
+
+    return " ".join(parts)
+
 # ── Richer signal schema ──────────────────────────────────────────
-def build_signal(s):
+def build_signal(s, fundamentals=None, mkt_ctx=None):
     """Take an existing signal dict and return it with all original fields
     PLUS the richer beginner-friendly fields. Never removes existing fields."""
     score = s.get("score", 0)
@@ -378,8 +443,12 @@ def build_signal(s):
         beginner_note = (f"No clear signal right now. Watch for price to break above "
                          f"${resistance:.2f} or below ${support:.2f} before acting.")
 
+    fundamentals = fundamentals or {}
+    merged = {**s, **fundamentals}
+
     return {
         **s,
+        **fundamentals,
         "ticker": s.get("symbol", ""),
         "signal": label,
         "setup_type": setup_type,
@@ -390,6 +459,7 @@ def build_signal(s):
         "target_2": target_2,
         "invalidation": stop_loss,
         "beginner_note": beginner_note,
+        "narrative": generate_narrative(merged, mkt_ctx),
     }
 
 # ── Market mood ───────────────────────────────────────────────────
@@ -425,13 +495,15 @@ def run_us_scan():
         # Phase 1 — portfolio (batch, ~5 sec)
         log.info(f"Downloading {len(port)} portfolio stocks...")
         ph = batch_dl(port, "1y")
+        mkt_ctx = ("S&P 500", spy_pct, bearish)
+        fund = get_fundamentals_batch(port)
         signals = []
         for sym in port:
             r = score(sym, ph.get(sym))
             if r:
                 if bearish and "BUY" in r["label"]:
                     r["label"]="HOLD"; r["why"]=f"Suppressed — SPY down {spy_pct}%"
-                r = build_signal(r)
+                r = build_signal(r, fund.get(sym), mkt_ctx)
                 signals.append(r)
                 log.info(f"  {sym}: {r['label']}  score={r['score']}")
             else:
@@ -445,12 +517,14 @@ def run_us_scan():
         # Phase 2 — watchlist (batch)
         wl = cfg.get("us_watchlist", US_WATCHLIST)
         wh = batch_dl(wl, "1y")
-        wl_picks = []
+        candidates = []
         for sym in wl:
             r = score(sym, wh.get(sym))
-            if r and r["score"]>=2: wl_picks.append(build_signal(r))
-        wl_picks.sort(key=lambda x:x["score"],reverse=True)
-        wl_picks = wl_picks[:3]
+            if r and r["score"]>=2: candidates.append(r)
+        candidates.sort(key=lambda x:x["score"],reverse=True)
+        candidates = candidates[:3]
+        wl_fund = get_fundamentals_batch([c["symbol"] for c in candidates])
+        wl_picks = [build_signal(c, wl_fund.get(c["symbol"]), mkt_ctx) for c in candidates]
         if bearish: wl_picks=[s for s in wl_picks if "BUY" not in s["label"]]
 
         # Phase 3 — penny (batch 1mo)
@@ -482,13 +556,15 @@ def run_india_scan():
 
         log.info(f"Downloading {len(port)} India portfolio stocks...")
         ph = batch_dl(port, "1y", ns=True)
+        mkt_ctx = ("NIFTY", nifty_pct, bearish)
+        fund = get_fundamentals_batch(port, ns=True)
         signals = []
         for sym in port:
             r = score(sym, ph.get(sym), ns=True)
             if r:
                 if bearish and "BUY" in r["label"]:
                     r["label"]="HOLD"; r["why"]=f"Suppressed — NIFTY down {nifty_pct}%"
-                r = build_signal(r)
+                r = build_signal(r, fund.get(sym), mkt_ctx)
                 signals.append(r)
                 log.info(f"  {sym}: {r['label']}")
             else:
@@ -500,12 +576,14 @@ def run_india_scan():
         log.info(f"India portfolio done ({len(signals)}). Downloading watchlist...")
 
         wh = batch_dl(INDIA_WATCHLIST, "1y", ns=True)
-        wl_picks = []
+        candidates = []
         for sym in INDIA_WATCHLIST:
             r = score(sym, wh.get(sym), ns=True)
-            if r and r["score"]>=2: wl_picks.append(build_signal(r))
-        wl_picks.sort(key=lambda x:x["score"],reverse=True)
-        wl_picks = wl_picks[:3]
+            if r and r["score"]>=2: candidates.append(r)
+        candidates.sort(key=lambda x:x["score"],reverse=True)
+        candidates = candidates[:3]
+        wl_fund = get_fundamentals_batch([c["symbol"] for c in candidates], ns=True)
+        wl_picks = [build_signal(c, wl_fund.get(c["symbol"]), mkt_ctx) for c in candidates]
         if bearish: wl_picks=[s for s in wl_picks if "BUY" not in s["label"]]
 
         # Phase 3 — India penny (under ₹30)
@@ -556,9 +634,12 @@ def run_top_picks_scan():
         for sym in universe:
             r = score(sym, hist.get(sym))
             if r and "BUY" in r["label"]:
-                buys.append(build_signal(r))
+                buys.append(r)
         buys.sort(key=lambda x:x["score"], reverse=True)
-        picks = buys[:5]
+        top5 = buys[:5]
+        mkt_ctx = ("S&P 500", spy_pct, bearish)
+        fund = get_fundamentals_batch([b["symbol"] for b in top5])
+        picks = [build_signal(b, fund.get(b["symbol"]), mkt_ctx) for b in top5]
 
         result = {"suppressed":False, "reason":None, "picks":picks,
                   "last_updated":datetime.now().isoformat()}
