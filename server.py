@@ -348,7 +348,7 @@ def get_fundamentals_batch(symbols, ns=False, timeout=8):
                 "prev_close": info.get("previousClose"),
             }
         except Exception as e:
-            log.debug(f"fundamentals {sym}: {e}")
+            log.warning(f"fundamentals {sym}: {type(e).__name__}: {e}")
             return sym, None
     with ThreadPoolExecutor(max_workers=min(8, len(symbols))) as ex:
         futures = {ex.submit(_one, sym, ts): sym for sym, ts in fetch_map.items()}
@@ -357,7 +357,8 @@ def get_fundamentals_batch(symbols, ns=False, timeout=8):
                 sym, data = fut.result(timeout=timeout)
                 if data: out[sym] = data
             except Exception as e:
-                log.debug(f"fundamentals future error: {e}")
+                log.warning(f"fundamentals future error: {e}")
+    log.info(f"Fundamentals: {len(out)}/{len(symbols)} fetched")
     return out
 
 # ── Plain-English narrative for "what's happening" ────────────────
