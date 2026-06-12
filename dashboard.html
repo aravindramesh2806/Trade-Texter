@@ -95,7 +95,7 @@
     .mood-warn { font-size: 11px; color: var(--muted); }
 
     /* ── SPY chart ── */
-    .chart-wrap { padding: 14px 24px 16px; }
+    .chart-wrap { padding: 14px 24px 0; }
     .chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 12px; flex-wrap: wrap; }
     .chart-title { font-size: 12px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
     .chart-title .ct-sub { font-size: 11px; color: var(--muted); font-weight: 400; }
@@ -277,10 +277,10 @@
     }
     .tp-card:hover { border-color: rgba(34,197,94,0.55); box-shadow: 0 6px 22px rgba(34,197,94,0.1); }
     .tp-toppick-badge {
+      position: absolute; top: 10px; right: 12px;
       font-size: 9px; font-weight: 700; color: #b8860b;
       background: rgba(234,179,8,0.16); border: 1px solid rgba(234,179,8,0.3);
       padding: 2px 7px; border-radius: 8px; letter-spacing: 0.04em;
-      white-space: nowrap;
     }
     .tp-sym { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding-right: 64px; }
     .tp-price { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; display: flex; align-items: baseline; gap: 6px; }
@@ -289,42 +289,6 @@
     .tp-price .tp-pct.red { color: var(--red); }
     .tp-reason { font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
     .tp-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
-
-    /* ── Compact stock card (Top Picks + Buy/Sell/Hold/Watchlist) ── */
-    .stock-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 12px 14px; cursor: pointer;
-      position: relative; overflow: hidden;
-      transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    .stock-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
-    .stock-card.strong-buy::before, .stock-card.buy::before  { background: var(--green); }
-    .stock-card.sell::before, .stock-card.strong-sell::before { background: var(--red); }
-    .stock-card.hold::before { background: var(--border2); }
-    .stock-card.strong-buy  { background: rgba(34,197,94,0.04); }
-    .stock-card.strong-sell { background: rgba(239,68,68,0.04); }
-    .stock-card:hover { border-color: var(--border2); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-    .stock-card.toppick { flex: 0 0 270px; scroll-snap-align: start; }
-
-    .sc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
-    .sc-id { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding-right: 2px; }
-    .sc-sym { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .sc-exch { font-size: 9px; font-weight: 700; color: var(--muted2); background: var(--surface3); padding: 1px 5px; border-radius: 4px; letter-spacing: 0.03em; }
-    .sc-name { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 175px; }
-    .sc-price-wrap { text-align: right; flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-    .sc-price { font-size: 15px; font-weight: 700; }
-    .sc-pct { font-size: 11px; font-weight: 700; }
-    .sc-chart { height: 52px; margin: 4px -14px 6px; }
-    .sc-chart svg { width: 100%; height: 100%; display: block; }
-    .sc-stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--border); border-radius: 7px; overflow: hidden; margin-bottom: 8px; }
-    .sc-stat { background: var(--surface2); padding: 5px 4px; text-align: center; }
-    .sc-stat label { font-size: 8px; color: var(--muted2); display: block; margin-bottom: 1px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-    .sc-stat span { font-size: 11px; font-weight: 700; }
-    .sc-narrative { font-size: 11px; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
-    .sc-foot { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-    .sc-foot .chip.conf-g { background: rgba(34,197,94,0.1);  color: var(--green); border-color: rgba(34,197,94,0.25); }
-    .sc-foot .chip.conf-y { background: rgba(245,158,11,0.1); color: var(--amber); border-color: rgba(245,158,11,0.25); }
-    .sc-foot .chip.conf-r { background: rgba(239,68,68,0.1);  color: var(--red);   border-color: rgba(239,68,68,0.25); }
 
     /* ── Penny card ── */
     .penny-card {
@@ -739,11 +703,35 @@ function renderTopPicks(data) {
 
   el.innerHTML = section('🔥 Top 5 Picks Today', picks.length, 'Your portfolio + curated large-caps — highest-conviction BUYs')
     + `<div class="toppicks-row">${picks.map(topPickCard).join('')}</div>`;
-  loadAllCardCharts(el);
 }
 
 function topPickCard(s) {
-  return stockCard(s, false, true);
+  const sym     = s.symbol || s.ticker;
+  const conf    = s.confidence ?? null;
+  const confCls = conf == null ? '' : conf > 70 ? 'conf-g' : conf >= 40 ? 'conf-y' : 'conf-r';
+  const riskCls = { 'Low':'risk-g', 'Medium':'risk-y', 'High':'risk-r' }[s.risk_band] || '';
+  return `
+  <div class="tp-card" onclick="openChart('${sym}',false)">
+    <span class="tp-toppick-badge">★ Top Pick</span>
+    <div class="tp-sym">${sym} ${badge(s.label)}</div>
+    ${s.price != null ? `<div class="tp-price">${fmt(s.price,false)} ${s.pct != null ? `<span class="tp-pct ${s.pct >= 0 ? 'green' : 'red'}">${s.pct >= 0 ? '+' : ''}${s.pct}%</span>` : ''}</div>` : ''}
+    ${(s.reasons && s.reasons.length) ? `<div class="tp-reason">📌 ${s.reasons.slice(0,2).join(' · ')}</div>` : ''}
+    <div class="tp-chips">
+      ${s.setup_type ? `<span class="chip chip-setup">${s.setup_type}</span>` : ''}
+      ${s.risk_band ? `<span class="chip ${riskCls}">${s.risk_band} risk</span>` : ''}
+    </div>
+    ${conf != null ? `<div class="conf-wrap">
+      <div class="conf-head"><span>How confident?</span><span class="conf-pct ${confCls}">${conf}%</span></div>
+      <div class="conf-track"><div class="conf-fill ${confCls}" style="width:${conf}%"></div></div>
+    </div>` : ''}
+    <div class="trade-grid">
+      ${s.entry_zone ? `<div class="tg"><label>Entry zone</label><span>${s.entry_zone}</span></div>` : ''}
+      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,false)}</span></div>` : ''}
+      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,false)}</span></div>` : ''}
+      ${s.invalidation != null ? `<div class="tg"><label>Invalidation</label><span>${fmt(s.invalidation,false)}</span></div>` : ''}
+    </div>
+    ${s.beginner_note ? `<div class="beginner-note"><span class="bn-icon">💡</span><span>${s.beginner_note}</span></div>` : ''}
+  </div>`;
 }
 
 async function fetchSignals(market) {
@@ -919,7 +907,6 @@ function renderContent(market, data) {
 
   html += `<div class="page-end"></div>`;
   el.innerHTML = html;
-  loadAllCardCharts(el);
 }
 
 function section(title, count, sub='') {
@@ -928,104 +915,59 @@ function section(title, count, sub='') {
 
 // ── Signal card ───────────────────────────────────────────────────
 function sigCard(s, india) {
-  return stockCard(s, india, false);
-}
+  const cls   = s.label.toLowerCase().replace(/ /g, '-');
+  const isBuy = s.label.includes('BUY');
+  const isSell= s.label.includes('SELL');
+  const rsiCls= s.rsi < 35 ? 'g' : s.rsi > 70 ? 'r' : '';
+  const scrCls= s.score >= 2 ? 'g' : s.score <= -2 ? 'r' : '';
+  const volCls= s.vol_ratio >= 1.5 ? 'g' : s.vol_ratio < 0.5 ? 'a' : '';
+  const profPct = s.profit_pct ?? ((s.resistance - s.price) / s.price * 100).toFixed(1);
 
-// ── Shared compact stock card (Top Picks + Buy/Sell/Hold/Watchlist) ──
-function fmtBig(n) {
-  if (n == null || !isFinite(n)) return '—';
-  const abs = Math.abs(n);
-  if (abs >= 1e12) return (n/1e12).toFixed(2) + 'T';
-  if (abs >= 1e9)  return (n/1e9).toFixed(2)  + 'B';
-  if (abs >= 1e6)  return (n/1e6).toFixed(2)  + 'M';
-  if (abs >= 1e3)  return (n/1e3).toFixed(1)  + 'K';
-  return n.toFixed(0);
-}
-function fmtPE(n) { return (n == null || !isFinite(n)) ? '—' : n.toFixed(1); }
-function fmtYieldPct(n) {
-  if (n == null || !isFinite(n)) return '—';
-  const pct = n < 1 ? n * 100 : n;
-  return pct.toFixed(2) + '%';
-}
-
-function stockCard(s, india, topPick) {
-  const sym     = s.symbol || s.ticker;
-  const cls     = (s.label || 'HOLD').toLowerCase().replace(/ /g, '-');
-  const isBuy   = (s.label || '').includes('BUY');
   const conf    = s.confidence ?? null;
   const confCls = conf == null ? '' : conf > 70 ? 'conf-g' : conf >= 40 ? 'conf-y' : 'conf-r';
   const riskCls = { 'Low':'risk-g', 'Medium':'risk-y', 'High':'risk-r' }[s.risk_band] || '';
-  const narrative = s.narrative || s.why || '';
 
   return `
-  <div class="stock-card ${cls}${topPick ? ' toppick' : ''}" onclick="openChart('${sym}',${india})">
-    <div class="sc-head">
-      <div class="sc-id">
-        <div class="sc-sym">${sym} ${badge(s.label)} ${aiBadge(s.ai_signal)}</div>
-        <div class="sc-name">${s.name ? s.name : ''}${s.exchange ? ` · ${s.exchange}` : ''}</div>
+  <div class="sig-card ${cls}" onclick="openChart('${s.symbol}',${india})">
+    <div class="card-header">
+      <div class="card-left">
+        <div class="card-sym">${s.symbol} ${badge(s.label)} ${aiBadge(s.ai_signal)}</div>
+        ${(s.setup_type || s.risk_band) ? `<div class="card-chips">
+          ${s.setup_type ? `<span class="chip chip-setup">${s.setup_type}</span>` : ''}
+          ${s.risk_band ? `<span class="chip ${riskCls}">${s.risk_band} risk</span>` : ''}
+        </div>` : ''}
       </div>
-      <div class="sc-price-wrap">
-        ${topPick ? `<span class="tp-toppick-badge">★ Top Pick</span>` : ''}
-        <div class="sc-price">${fmt(s.price,india)}</div>
-        ${s.pct != null ? `<div class="sc-pct ${s.pct>=0?'up':'down'}">${s.pct>=0?'▲':'▼'} ${Math.abs(s.pct).toFixed(2)}%</div>` : ''}
+      <div class="card-right">
+        <div class="card-price">${fmt(s.price,india)}</div>
+        <div class="card-chg ${s.pct>=0?'up':'down'}">${s.pct>=0?'▲':'▼'} ${Math.abs(s.pct).toFixed(2)}%</div>
       </div>
     </div>
-    ${topPick ? `<div class="sc-chart"><svg viewBox="0 0 300 90" preserveAspectRatio="none" class="sc-svg" data-sym="${sym}" data-prev="${s.prev_close ?? ''}"></svg></div>` : ''}
-    <div class="sc-stats-row">
-      <div class="sc-stat"><label>Volume</label><span>${fmtBig(s.volume)}</span></div>
-      <div class="sc-stat"><label>Mkt Cap</label><span>${fmtBig(s.market_cap)}</span></div>
-      <div class="sc-stat"><label>P/E</label><span>${fmtPE(s.pe_ratio)}</span></div>
-      <div class="sc-stat"><label>Yield</label><span>${fmtYieldPct(s.div_yield)}</span></div>
-    </div>
-    ${narrative ? `<div class="sc-narrative">${narrative}</div>` : ''}
-    <div class="sc-foot">
-      ${s.setup_type ? `<span class="chip chip-setup">${s.setup_type}</span>` : ''}
-      ${s.risk_band ? `<span class="chip ${riskCls}">${s.risk_band} risk</span>` : ''}
-      ${conf != null ? `<span class="chip ${confCls}">Conf ${conf}%</span>` : ''}
-      ${isBuy && s.target_1 != null ? `<span class="pill pill-target">Target ${fmt(s.target_1,india)}</span>` : ''}
-      ${s.invalidation != null ? `<span class="pill pill-stop">Stop ${fmt(s.invalidation,india)}</span>` : ''}
+    <div class="card-why">${s.why}</div>
+    ${conf != null ? `<div class="conf-wrap">
+      <div class="conf-head"><span>How confident?</span><span class="conf-pct ${confCls}">${conf}%</span></div>
+      <div class="conf-track"><div class="conf-fill ${confCls}" style="width:${conf}%"></div></div>
+    </div>` : ''}
+    ${isBuy ? `<div class="card-pills">
+      <span class="pill pill-target">↑ Target ${fmt(s.resistance,india)} (+${profPct}%)</span>
+      <span class="pill pill-stop">Stop ${fmt(s.stop_loss,india)}</span>
+    </div>` : ''}
+    ${isSell ? `<div class="card-pills">
+      <span class="pill pill-sell">↓ Sell near ${fmt(s.resistance,india)}</span>
+      <span class="pill pill-stop">Protect ${fmt(s.stop_loss,india)}</span>
+    </div>` : ''}
+    ${(s.entry_zone || s.target_1 != null) ? `<div class="trade-grid">
+      ${s.entry_zone ? `<div class="tg"><label>Entry zone</label><span>${s.entry_zone}</span></div>` : ''}
+      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,india)}</span></div>` : ''}
+      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,india)}</span></div>` : ''}
+      ${s.invalidation != null ? `<div class="tg"><label>Invalidation</label><span>${fmt(s.invalidation,india)}</span></div>` : ''}
+    </div>` : ''}
+    ${s.beginner_note ? `<div class="beginner-note"><span class="bn-icon">💡</span><span>${s.beginner_note}</span></div>` : ''}
+    <div class="card-stats">
+      <div class="cs ${rsiCls}"><label>RSI</label><span>${s.rsi}</span></div>
+      <div class="cs ${scrCls}"><label>Score</label><span>${s.score}</span></div>
+      <div class="cs ${volCls}"><label>Volume</label><span>${s.vol_ratio ? s.vol_ratio+'x' : '—'}</span></div>
     </div>
   </div>`;
-}
-
-// ── Per-card mini intraday chart loader ────────────────────────────
-async function loadCardChart(svg) {
-  const sym  = svg.dataset.sym;
-  const prev = svg.dataset.prev ? parseFloat(svg.dataset.prev) : null;
-  try {
-    const r = await fetch(`/api/chart?symbol=${encodeURIComponent(sym)}&range=1d`);
-    if (!r.ok) throw new Error('bad response');
-    const d = await r.json();
-    const candles = d.candles || [];
-    if (!candles.length) { svg.innerHTML = ''; return; }
-
-    const closes = candles.map(c => c.close);
-    const first = closes[0], last = closes[closes.length-1];
-    const up = last >= first;
-    const all = (prev != null && isFinite(prev)) ? closes.concat([prev]) : closes;
-    const min = Math.min(...all), max = Math.max(...all);
-    const range = (max - min) || 1;
-    const w = 300, h = 90, pad = 4;
-    const pts = closes.map((c,i) => {
-      const x = (i/(closes.length-1)) * (w-pad*2) + pad;
-      const y = h-pad - ((c-min)/range) * (h-pad*2);
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    });
-    const color = up ? '#22c55e' : '#ef4444';
-    const areaPts = `${pad},${h-pad} ${pts.join(' ')} ${w-pad},${h-pad}`;
-    let baseline = '';
-    if (prev != null && isFinite(prev)) {
-      const baseY = (h-pad - ((prev-min)/range) * (h-pad*2)).toFixed(2);
-      baseline = `<line x1="${pad}" y1="${baseY}" x2="${w-pad}" y2="${baseY}" stroke="#888" stroke-width="1" stroke-dasharray="3,3"/>`;
-    }
-    svg.innerHTML = `${baseline}<polygon points="${areaPts}" fill="${color}" opacity="0.10"/><polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"/>`;
-  } catch (e) {
-    svg.innerHTML = '';
-  }
-}
-
-function loadAllCardCharts(container) {
-  container.querySelectorAll('.sc-svg').forEach(loadCardChart);
 }
 
 // ── Penny card ────────────────────────────────────────────────────
