@@ -38,17 +38,6 @@ logging.basicConfig(
 log = logging.getLogger("server")
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
-# yfinance's quoteSummary endpoint (used by get_info/.fast_info) returns
-# "401 Invalid Crumb" with a plain requests session because Yahoo now
-# requires a browser-like TLS fingerprint. curl_cffi impersonates Chrome's
-# TLS handshake, which lets the crumb/cookie negotiation succeed.
-try:
-    from curl_cffi import requests as cc_requests
-    _YF_SESSION = cc_requests.Session(impersonate="chrome")
-except Exception as e:
-    log.debug(f"curl_cffi unavailable, falling back to default session: {e}")
-    _YF_SESSION = None
-
 # ── Config ────────────────────────────────────────────────────────
 def read_config():
     try:
@@ -329,36 +318,67 @@ def score_penny(sym, hist, max_price=5.0):
         return None
 
 # ── Fundamentals (name, market cap, P/E, dividend yield, volume) ──
+# Cache fundamentals for a while — Yahoo aggressively rate-limits the
+# quoteSummary endpoint, and this data barely changes within a scan cycle.
+_FUND_CACHE = {}
+_FUND_CACHE_TTL = 20 * 60  # seconds
+
 def get_fundamentals_batch(symbols, ns=False, timeout=8):
     """Fetch lightweight company info for a small set of symbols in parallel."""
     if not symbols: return {}
     fetch_map = {s: (s+".NS" if ns and not s.endswith(".NS") else s) for s in symbols}
     out = {}
+    now = time.time()
+    to_fetch = {}
+    for sym, tsym in fetch_map.items():
+        cached = _FUND_CACHE.get(tsym)
+        if cached and (now - cached[0]) < _FUND_CACHE_TTL:
+            out[sym] = cached[1]
+        else:
+            to_fetch[sym] = tsym
+
     def _one(sym, tsym):
-        try:
-            t = yf.Ticker(tsym, session=_YF_SESSION) if _YF_SESSION else yf.Ticker(tsym)
-            info = t.get_info()
-            return sym, {
-                "name":      info.get("shortName") or info.get("longName") or sym,
-                "exchange":  info.get("exchange") or ("NSE" if ns else ""),
-                "market_cap": info.get("marketCap"),
-                "pe_ratio":  info.get("trailingPE"),
-                "div_yield": info.get("dividendYield"),
-                "volume":    info.get("volume") or info.get("regularMarketVolume"),
-                "prev_close": info.get("previousClose"),
-            }
-        except Exception as e:
-            log.warning(f"fundamentals {sym}: {type(e).__name__}: {e}")
-            return sym, None
-    with ThreadPoolExecutor(max_workers=min(8, len(symbols))) as ex:
-        futures = {ex.submit(_one, sym, ts): sym for sym, ts in fetch_map.items()}
-        for fut in as_completed(futures, timeout=timeout * len(symbols)):
+        for attempt in range(2):
             try:
-                sym, data = fut.result(timeout=timeout)
-                if data: out[sym] = data
+                # Each call gets its own curl_cffi session — sharing one
+                # session across threads causes intermittent
+                # "argument of type 'NoneType' is not a container" errors
+                # inside yfinance's get_info().
+                try:
+                    from curl_cffi import requests as cc_requests
+                    sess = cc_requests.Session(impersonate="chrome")
+                    t = yf.Ticker(tsym, session=sess)
+                except Exception:
+                    t = yf.Ticker(tsym)
+                info = t.get_info()
+                return sym, {
+                    "name":      info.get("shortName") or info.get("longName") or sym,
+                    "exchange":  info.get("exchange") or ("NSE" if ns else ""),
+                    "market_cap": info.get("marketCap"),
+                    "pe_ratio":  info.get("trailingPE"),
+                    "div_yield": info.get("dividendYield"),
+                    "volume":    info.get("volume") or info.get("regularMarketVolume"),
+                    "prev_close": info.get("previousClose"),
+                }
             except Exception as e:
-                log.warning(f"fundamentals future error: {e}")
-    log.info(f"Fundamentals: {len(out)}/{len(symbols)} fetched")
+                if attempt == 0:
+                    time.sleep(1.5)
+                    continue
+                log.warning(f"fundamentals {sym}: {type(e).__name__}: {e}")
+                return sym, None
+
+    if to_fetch:
+        with ThreadPoolExecutor(max_workers=min(3, len(to_fetch))) as ex:
+            futures = {ex.submit(_one, sym, ts): sym for sym, ts in to_fetch.items()}
+            for fut in as_completed(futures, timeout=timeout * len(to_fetch) * 2):
+                try:
+                    sym, data = fut.result(timeout=timeout * 2)
+                    if data:
+                        out[sym] = data
+                        _FUND_CACHE[fetch_map[sym]] = (now, data)
+                except Exception as e:
+                    log.warning(f"fundamentals future error: {e}")
+    log.info(f"Fundamentals: {len(out)}/{len(symbols)} fetched ({len(symbols)-len(to_fetch)} cached)")
     return out
 
 # ── Plain-English narrative for "what's happening" ────────────────
