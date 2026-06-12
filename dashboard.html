@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>McLean Trade Bot — AI Stock Signals</title>
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     :root {
       --bg:       #09090b;
@@ -517,11 +517,17 @@ function initSpyChart() {
     timeScale: { borderColor: '#27272a', timeVisible: true, secondsVisible: false },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
   });
-  spySeries = spyChart.addCandlestickSeries({
+  const candleOpts = {
     upColor: '#22c55e', downColor: '#ef4444',
     borderUpColor: '#22c55e', borderDownColor: '#ef4444',
     wickUpColor: '#22c55e', wickDownColor: '#ef4444',
-  });
+  };
+  // lightweight-charts v5 replaced addCandlestickSeries() with addSeries(CandlestickSeries, ...)
+  if (typeof spyChart.addCandlestickSeries === 'function') {
+    spySeries = spyChart.addCandlestickSeries(candleOpts);
+  } else {
+    spySeries = spyChart.addSeries(LightweightCharts.CandlestickSeries, candleOpts);
+  }
   window.addEventListener('resize', () => {
     if (spyChart && box.clientWidth) spyChart.resize(box.clientWidth, 220);
   });
@@ -544,6 +550,8 @@ async function loadSpyChart(range, tabEl) {
     }));
     if (!candles.length) { if (status) status.textContent = 'No data available'; return; }
     spySeries.setData(candles);
+    const box = document.getElementById('spy-chart-box');
+    if (box && box.clientWidth) spyChart.applyOptions({ width: box.clientWidth });
     spyChart.timeScale().fitContent();
     if (status) status.style.display = 'none';
   } catch (e) {
