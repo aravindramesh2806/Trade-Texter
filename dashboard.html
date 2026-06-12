@@ -492,6 +492,11 @@ const CHART_US    = s => `https://www.tradingview.com/chart/?symbol=${encodeURIC
 const CHART_INDIA = s => `https://www.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(s)}`;
 
 // ── Boot ──────────────────────────────────────────────────────────
+// ── SPY chart state ──────────────────────────────────────────────
+let spyChart      = null;
+let spySeries     = null;
+let spyChartRange = '1d';
+
 if (location.protocol === 'file:') {
   document.getElementById('server-warning').style.display = 'flex';
 }
@@ -501,9 +506,6 @@ schedulePoll();
 initSpyChart();
 
 // ── SPY chart ─────────────────────────────────────────────────────
-let spyChart      = null;
-let spySeries     = null;
-let spyChartRange = '1d';
 
 function initSpyChart() {
   const box = document.getElementById('spy-chart-box');
