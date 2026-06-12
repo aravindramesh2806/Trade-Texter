@@ -36,6 +36,18 @@ logging.basicConfig(
     ]
 )
 log = logging.getLogger("server")
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+
+# yfinance's quoteSummary endpoint (used by get_info/.fast_info) returns
+# "401 Invalid Crumb" with a plain requests session because Yahoo now
+# requires a browser-like TLS fingerprint. curl_cffi impersonates Chrome's
+# TLS handshake, which lets the crumb/cookie negotiation succeed.
+try:
+    from curl_cffi import requests as cc_requests
+    _YF_SESSION = cc_requests.Session(impersonate="chrome")
+except Exception as e:
+    log.debug(f"curl_cffi unavailable, falling back to default session: {e}")
+    _YF_SESSION = None
 
 # ── Config ────────────────────────────────────────────────────────
 def read_config():
@@ -324,7 +336,8 @@ def get_fundamentals_batch(symbols, ns=False, timeout=8):
     out = {}
     def _one(sym, tsym):
         try:
-            info = yf.Ticker(tsym).get_info()
+            t = yf.Ticker(tsym, session=_YF_SESSION) if _YF_SESSION else yf.Ticker(tsym)
+            info = t.get_info()
             return sym, {
                 "name":      info.get("shortName") or info.get("longName") or sym,
                 "exchange":  info.get("exchange") or ("NSE" if ns else ""),
