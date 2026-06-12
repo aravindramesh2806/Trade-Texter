@@ -607,6 +607,9 @@ def chart_candles(symbol="SPY", rng="1d"):
         "1d":  {"period": "1d",  "interval": "5m"},
         "1w":  {"period": "5d",  "interval": "30m"},
         "1mo": {"period": "1mo", "interval": "1d"},
+        "6mo": {"period": "6mo", "interval": "1d"},
+        "1y":  {"period": "1y",  "interval": "1wk"},
+        "5y":  {"period": "5y",  "interval": "1mo"},
     }
     cfg = params.get(rng, params["1d"])
     df = yf.download(symbol, period=cfg["period"], interval=cfg["interval"],
