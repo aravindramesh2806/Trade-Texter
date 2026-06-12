@@ -737,10 +737,9 @@ class Handler(SimpleHTTPRequestHandler):
             pass
 
 if __name__=="__main__":
-    port=8080
+    port = int(os.environ.get("PORT", 8080))
     print(f"\n✅ McLean Trade Bot starting on port {port}")
     print(f"   http://localhost:{port}/dashboard.html")
     print("   Background scan starting now — portfolio results in ~30 sec\n")
     threading.Thread(target=background_loop,daemon=True).start()
-    os.system(f"open http://localhost:{port}/dashboard.html")
     HTTPServer(("",port),Handler).serve_forever()
