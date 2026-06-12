@@ -57,7 +57,7 @@
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
     /* Buttons */
-    .btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); transition: all 0.15s; white-space: nowrap; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); transition: all 0.15s; white-space: nowrap; }
     .btn:hover { border-color: var(--border2); background: var(--surface3); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-primary { background: var(--green); color: #000; border-color: var(--green); font-weight: 600; }
@@ -445,6 +445,30 @@
       <h3>🔔 Telegram Alerts</h3>
       <p class="sub">Get BUY/SELL signals in Telegram every weekday morning at 8:45 AM automatically.</p>
 
+      <div class="step">
+        <span class="step-num">1</span><strong>Create your bot.</strong>
+        <div style="font-size:12px;color:var(--muted);margin:4px 0 0 26px;line-height:1.6">
+          Open Telegram, search for <strong style="color:var(--text)">@BotFather</strong>, and send <code style="font-family:monospace;color:var(--blue2)">/newbot</code>. Follow the prompts (give it a name and a username ending in "bot"). BotFather replies with a token — copy it.
+        </div>
+      </div>
+      <div class="step">
+        <span class="step-num">2</span><strong>Start a chat with your new bot.</strong>
+        <div style="font-size:12px;color:var(--muted);margin:4px 0 0 26px;line-height:1.6">
+          Search for your bot by its username and send it any message (e.g. "hi"). This lets it message you back.
+        </div>
+      </div>
+      <div class="step">
+        <span class="step-num">3</span><strong>Find your Chat ID.</strong>
+        <div style="font-size:12px;color:var(--muted);margin:4px 0 0 26px;line-height:1.6">
+          In your browser, visit:
+          <div class="code-block"><code>https://api.telegram.org/bot&lt;YOUR_TOKEN&gt;/getUpdates</code></div>
+          Look for <code style="font-family:monospace;color:var(--blue2)">"chat":{"id":12345678...}</code> in the response — that number is your Chat ID.
+        </div>
+      </div>
+      <div class="step">
+        <span class="step-num">4</span><strong>Paste both values below, save, and send a test message.</strong>
+      </div>
+
       <div class="market-opts">
         <div class="mopt" id="opt-us"    onclick="selMarket('us')"><span class="flag">🇺🇸</span><div class="mn">US Only</div></div>
         <div class="mopt" id="opt-india" onclick="selMarket('india')"><span class="flag">🇮🇳</span><div class="mn">India Only</div></div>
@@ -462,9 +486,12 @@
         <div class="hint">Message your bot → visit <code style="font-family:monospace;color:var(--blue2)">api.telegram.org/bot{TOKEN}/getUpdates</code> → find chat.id</div>
       </div>
 
-      <button class="btn btn-primary" onclick="saveConfig()" style="width:100%">Save &amp; Send Test Message</button>
-      <div class="notice ok" id="cfg-ok">✓ Saved! Test message sent to Telegram.</div>
+      <button class="btn btn-primary" onclick="saveConfig()" style="width:100%">Save Settings</button>
+      <button class="btn" id="test-msg-btn" onclick="sendTestMessage()" style="width:100%;margin-top:8px">📨 Send Test Message</button>
+      <div class="notice ok" id="cfg-ok">✓ Saved!</div>
       <div class="notice err" id="cfg-err"></div>
+      <div class="notice ok" id="test-ok">✓ Test message sent — check Telegram.</div>
+      <div class="notice err" id="test-err">✗ Could not send test message. Double-check your token &amp; chat ID, and make sure you've messaged your bot at least once.</div>
     </div>
 
     <!-- Share with friends -->
@@ -992,14 +1019,43 @@ async function saveConfig() {
   const ok  = document.getElementById('cfg-ok');
   const err = document.getElementById('cfg-err');
   ok.style.display='none'; err.style.display='none';
+  document.getElementById('test-ok').style.display='none';
+  document.getElementById('test-err').style.display='none';
   if (!token || !chatid) { err.textContent='Fill in both fields.'; err.style.display='block'; return; }
   try {
     const r = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({telegram_token:token, telegram_chat_id:chatid, market:setupMarket})});
     const d = await r.json();
-    if (d.ok) { ok.style.display='block'; await fetch('/api/notify-test'); }
+    if (d.ok) { ok.style.display='block'; }
     else { err.textContent='Save failed: '+(d.error||'unknown'); err.style.display='block'; }
   } catch(e) { err.textContent='Cannot reach server: '+e.message; err.style.display='block'; }
+}
+
+async function sendTestMessage() {
+  const btn = document.getElementById('test-msg-btn');
+  const ok  = document.getElementById('test-ok');
+  const err = document.getElementById('test-err');
+  ok.style.display='none'; err.style.display='none';
+  const token  = document.getElementById('cfg-token').value.trim();
+  const chatid = document.getElementById('cfg-chatid').value.trim();
+  if (!token || !chatid) { err.textContent='Fill in both fields and click "Save Settings" first.'; err.style.display='block'; return; }
+  btn.disabled = true;
+  const origText = btn.textContent;
+  btn.textContent = 'Sending…';
+  try {
+    // make sure server has the latest values saved before testing
+    await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({telegram_token:token, telegram_chat_id:chatid, market:setupMarket})});
+    const r = await fetch('/api/notify-test');
+    const d = await r.json();
+    if (d.ok) { ok.style.display='block'; } else { err.style.display='block'; }
+  } catch(e) {
+    err.textContent = 'Cannot reach server: ' + e.message;
+    err.style.display='block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
 }
 
 async function loadConfig() {
