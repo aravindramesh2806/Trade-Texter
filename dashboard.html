@@ -597,6 +597,16 @@ let mpMarket    = 'us';   // active market for the My Portfolio settings card
 const CHART_US    = s => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(s)}`;
 const CHART_INDIA = s => `https://www.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(s)}`;
 
+// ── Top Assets (state) ────────────────────────────────────────────
+let trendRange = '1d';
+const TREND_SUB = { '1d':'today', '1w':'past week', '1mo':'past month', '6mo':'past 6 months', '1y':'past year', '5y':'past 5 years' };
+const TOP_ASSETS = [
+  { symbol: 'SPY', label: 'S&P 500' },
+  { symbol: 'QQQ', label: 'NASDAQ 100' },
+  { symbol: 'DIA', label: 'Dow Jones' },
+  { symbol: '^VIX', label: 'VIX' },
+];
+
 // ── Boot ──────────────────────────────────────────────────────────
 if (location.protocol === 'file:') {
   document.getElementById('server-warning').style.display = 'flex';
@@ -609,16 +619,6 @@ setInterval(loadMarketTrend, 60000);
 renderPortfolioChips();
 fetchCustomPortfolio('us');
 fetchCustomPortfolio('india');
-
-// ── Top Assets ──────────────────────────────────────────────────────
-let trendRange = '1d';
-const TREND_SUB = { '1d':'today', '1w':'past week', '1mo':'past month', '6mo':'past 6 months', '1y':'past year', '5y':'past 5 years' };
-const TOP_ASSETS = [
-  { symbol: 'SPY', label: 'S&P 500' },
-  { symbol: 'QQQ', label: 'NASDAQ 100' },
-  { symbol: 'DIA', label: 'Dow Jones' },
-  { symbol: '^VIX', label: 'VIX' },
-];
 
 function setTrendRange(rng) {
   if (rng === trendRange) return;
