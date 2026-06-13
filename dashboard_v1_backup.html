@@ -54,10 +54,10 @@
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
     .live-dot.scanning { background: var(--amber); }
     .live-dot.offline { background: var(--muted2); animation: none; }
-    @keyframes pulse { 0%,100%{opacity:0.9} 50%{opacity:0.45} }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
     /* Buttons */
-    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); transition: all 0.25s ease; white-space: nowrap; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); transition: all 0.15s; white-space: nowrap; }
     .btn:hover { border-color: var(--border2); background: var(--surface3); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-primary { background: var(--green); color: #000; border-color: var(--green); font-weight: 600; }
@@ -83,11 +83,6 @@
 
     /* ── Market mood bar ── */
     .mood-bar { display: flex; align-items: center; gap: 10px; padding: 10px 24px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; min-height: 44px; }
-    .market-clock { display: flex; align-items: center; gap: 8px; padding: 6px 24px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--bg2, rgba(255,255,255,0.02)); }
-    .market-clock .mc-time { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-    .market-clock .mc-status { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; }
-    .market-clock .mc-status.open { background: rgba(34,197,94,0.18); color: var(--green); }
-    .market-clock .mc-status.closed { background: rgba(239,68,68,0.18); color: var(--red); }
     .mood-chip { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); font-size: 12px; white-space: nowrap; }
     .mood-chip.bull { border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.06); }
     .mood-chip.bear { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.06); }
@@ -110,7 +105,7 @@
     .chart-tab.active { color: var(--text); background: var(--surface3); border-color: var(--green); }
     .chart-status { font-size: 12px; color: var(--muted); padding: 10px 0; text-align: center; }
     .assets-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-    .asset-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-sizing: border-box; height: 150px; display: flex; flex-direction: column; overflow: hidden; transition: border-color 0.25s ease; }
+    .asset-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; box-sizing: border-box; height: 150px; display: flex; flex-direction: column; overflow: hidden; }
     .ac-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
     .ac-name { font-size: 13px; font-weight: 700; color: var(--text); }
     .ac-pct { font-size: 13px; font-weight: 700; white-space: nowrap; }
@@ -156,8 +151,8 @@
     /* ── Signal card ── */
     .sig-card {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; padding: 14px 16px; cursor: pointer;
-      transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+      border-radius: 10px; padding: 14px 16px; cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
       position: relative; overflow: hidden;
     }
     .sig-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
@@ -168,7 +163,7 @@
     .sig-card.hold::before    { background: var(--border2); }
     .sig-card.strong-buy      { background: rgba(34,197,94,0.04); }
     .sig-card.strong-sell     { background: rgba(239,68,68,0.04); }
-    .sig-card:hover { border-color: var(--border2); box-shadow: 0 4px 18px rgba(0,0,0,0.25); transform: translateY(-1px); }
+    .sig-card:hover { border-color: var(--border2); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
 
     .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
     .card-left { display: flex; flex-direction: column; gap: 4px; }
@@ -229,38 +224,20 @@
     .tg { background: var(--surface2); padding: 6px 8px; }
     .tg label { font-size: 9px; color: var(--muted2); display: block; margin-bottom: 2px; font-weight: 500; }
     .tg span { font-size: 12px; font-weight: 600; color: var(--text); }
-    .tg-eta { font-size: 9px; font-weight: 500; color: var(--muted2); }
 
     .beginner-note { display: flex; gap: 7px; align-items: flex-start; font-size: 11px; line-height: 1.5; color: var(--text); background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.18); border-radius: 7px; padding: 8px 10px; margin-bottom: 10px; }
     .bn-icon { flex-shrink: 0; }
 
-    .options-note { font-size: 12px; line-height: 1.5; color: var(--muted); background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.18); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
-
-    /* ── New: signal-change / multi-timeframe / sizing / news extras ── */
-    .card-extra { margin-bottom: 10px; }
-    .extra-row { font-size: 11px; line-height: 1.5; border-radius: 7px; padding: 6px 9px; margin-bottom: 6px; background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.18); color: var(--text); }
-    .extra-row.warn { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.22); color: #fbbf24; }
-    .extra-row.change { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.22); color: #d8b4fe; font-weight: 600; }
-    .extra-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-    .meta-chip { font-size: 10px; font-weight: 500; color: var(--muted); background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 3px 7px; }
-    .extra-news { font-size: 11px; color: var(--muted); line-height: 1.5; margin-bottom: 6px; }
-    .btn-backtest { font-size: 11px; font-weight: 500; color: var(--blue2); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; cursor: pointer; }
-    .btn-backtest:hover { border-color: var(--border2); }
-    .backtest-result { font-size: 11px; line-height: 1.6; color: var(--muted); margin-top: 6px; }
-    .backtest-result table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-    .backtest-result td, .backtest-result th { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--border); }
-    .sector-warn { font-size: 11px; color: #fbbf24; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.22); border-radius: 7px; padding: 6px 10px; margin: 0 24px 10px; }
-
     /* ── Best pick card ── */
     .best-section { padding: 20px 24px 0; }
     .best-card {
-      background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(59,130,246,0.04) 100%);
-      border: 1px solid rgba(34,197,94,0.2);
-      border-radius: 14px; padding: 18px 20px; cursor: pointer;
-      transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+      background: linear-gradient(135deg, rgba(34,197,94,0.07) 0%, rgba(59,130,246,0.05) 100%);
+      border: 1px solid rgba(34,197,94,0.25);
+      border-radius: 12px; padding: 18px 20px; cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
       position: relative; overflow: hidden;
     }
-    .best-card:hover { border-color: rgba(34,197,94,0.4); box-shadow: 0 8px 28px rgba(34,197,94,0.06); transform: translateY(-1px); }
+    .best-card:hover { border-color: rgba(34,197,94,0.5); box-shadow: 0 8px 30px rgba(34,197,94,0.08); }
     .best-eyebrow { font-size: 10px; font-weight: 700; color: var(--green); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
     .best-main { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
     .best-sym { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
@@ -275,10 +252,6 @@
     .bm-val.green { color: var(--green); }
     .bm-val.amber { color: var(--amber); }
     .bm-divider { width: 1px; background: var(--border); align-self: stretch; margin: 2px 0; }
-    .best-spark { margin: 10px 0 14px; height: 72px; }
-    .best-spark svg { width: 100%; height: 72px; display: block; }
-    .best-live { font-size: 10px; font-weight: 700; color: var(--green); display: inline-flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; justify-content: flex-end; }
-    .best-live .live-dot-sm { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
 
     /* ── Top 5 Picks ── */
     .toppicks-section { padding: 20px 24px 0; }
@@ -296,13 +269,13 @@
     .toppicks-row::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
     .tp-card {
       flex: 0 0 280px; scroll-snap-align: start;
-      background: linear-gradient(135deg, rgba(34,197,94,0.05) 0%, rgba(234,179,8,0.03) 100%);
-      border: 1px solid rgba(34,197,94,0.18); border-left: 3px solid var(--green);
-      border-radius: 14px; padding: 14px 16px; cursor: pointer;
+      background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(234,179,8,0.04) 100%);
+      border: 1px solid rgba(34,197,94,0.22); border-left: 3px solid var(--green);
+      border-radius: 12px; padding: 14px 16px; cursor: pointer;
       position: relative; overflow: hidden;
-      transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .tp-card:hover { border-color: rgba(34,197,94,0.45); box-shadow: 0 6px 20px rgba(34,197,94,0.08); transform: translateY(-1px); }
+    .tp-card:hover { border-color: rgba(34,197,94,0.55); box-shadow: 0 6px 22px rgba(34,197,94,0.1); }
     .tp-toppick-badge {
       position: absolute; top: 10px; right: 12px;
       font-size: 9px; font-weight: 700; color: #b8860b;
@@ -316,16 +289,12 @@
     .tp-price .tp-pct.red { color: var(--red); }
     .tp-reason { font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
     .tp-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
-    .tp-live { font-size: 9px; font-weight: 700; color: var(--green); display: inline-flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
-    .tp-live .live-dot-sm { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
-    .tp-spark { margin: 2px 0 10px; height: 46px; }
-    .tp-spark svg { width: 100%; height: 46px; display: block; }
 
     /* ── Penny card ── */
     .penny-card {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; padding: 12px 14px; cursor: pointer;
-      transition: border-color 0.25s ease;
+      border-radius: 10px; padding: 12px 14px; cursor: pointer;
+      transition: border-color 0.15s;
       border-top: 2px solid var(--orange);
     }
     .penny-card:hover { border-color: var(--orange); }
@@ -365,14 +334,6 @@
     .mopt .flag { font-size: 18px; display: block; margin-bottom: 3px; }
     .mopt .mn { font-size: 11px; font-weight: 600; }
     .mopt .ms { font-size: 10px; color: var(--muted); }
-    .ticker-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-    .ticker-chip { display: flex; align-items: center; gap: 6px; background: var(--bg2, rgba(255,255,255,0.04)); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; }
-    .ticker-chip .x { cursor: pointer; color: var(--muted); font-weight: 700; }
-    .ticker-chip .x:hover { color: var(--red); }
-    .mp-field { display: flex; gap: 8px; align-items: flex-end; }
-    .mp-field > div { flex: 1; }
-    .mp-field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
-    .mp-field input { width: 100%; box-sizing: border-box; }
     .hint { font-size: 11px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
     .notice { padding: 9px 12px; border-radius: 7px; font-size: 12px; margin-top: 10px; display: none; }
     .notice.ok  { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
@@ -441,15 +402,11 @@
   <div class="tab" id="tab-india" onclick="switchTab('india')">
     🇮🇳 India NSE <span class="tab-badge" id="tb-india">—</span>
   </div>
-  <div class="tab" id="tab-options" onclick="switchTab('options')">
-    📈 Options <span class="tab-badge" id="tb-options">—</span>
-  </div>
   <div class="tab" id="tab-setup" onclick="switchTab('setup')">⚙ Setup</div>
 </div>
 
 <!-- ── US Panel ── -->
 <div class="panel active" id="panel-us">
-  <div class="market-clock" id="us-clock"></div>
   <div class="mood-bar" id="us-mood"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
   <div class="chart-wrap">
     <div class="chart-head">
@@ -467,51 +424,20 @@
     <div class="chart-status" id="trend-status" style="display:none">Loading…</div>
   </div>
   <div class="stats-bar" id="us-stats"></div>
-  <div id="us-myportfolio"></div>
   <div id="us-toppicks"></div>
   <div id="us-content"><div class="loading-box"><div class="big-spinner"></div><p>Running initial scan…</p><small>Portfolio results appear in ~30 seconds</small></div></div>
 </div>
 
 <!-- ── India Panel ── -->
 <div class="panel" id="panel-india">
-  <div class="market-clock" id="india-clock"></div>
   <div class="mood-bar" id="india-mood"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
   <div class="stats-bar" id="india-stats"></div>
-  <div id="india-myportfolio"></div>
   <div id="india-content"><div class="loading-box"><div class="big-spinner"></div><p>Running initial scan…</p><small>Portfolio results appear in ~30 seconds</small></div></div>
-</div>
-
-<!-- ── Options Panel ── -->
-<div class="panel" id="panel-options">
-  <div class="options-note">📈 Call/put strike ideas for stocks currently showing a <b>BUY</b> or <b>SELL</b> signal in your US portfolio, watchlist picks, and top picks — anchored to the same support/resistance levels the signal engine already computes. Two expiries shown: the nearest listed expiry and one ~3-4 weeks out. <b>Educational only, not a recommendation.</b></div>
-  <div id="options-content"><div class="loading-box"><div class="big-spinner"></div><p>Loading options ideas…</p><small>Only shown for tickers with an active BUY/SELL signal</small></div></div>
 </div>
 
 <!-- ── Setup Panel ── -->
 <div class="panel" id="panel-setup">
   <div class="setup-grid">
-
-    <!-- My Portfolio -->
-    <div class="setup-card" style="grid-column:1/-1">
-      <h3>📋 My Portfolio</h3>
-      <p class="sub">Add your own stock tickers to get personalized signals, sector exposure, and news on the US Stocks / India NSE tabs — shown above the default portfolio. Saved only on this device.</p>
-
-      <div class="market-opts">
-        <div class="mopt sel" id="mp-opt-us" onclick="selPortfolioMarket('us')"><span class="flag">🇺🇸</span><div class="mn">US</div></div>
-        <div class="mopt" id="mp-opt-india" onclick="selPortfolioMarket('india')"><span class="flag">🇮🇳</span><div class="mn">India (NSE)</div></div>
-      </div>
-
-      <div class="mp-field">
-        <div>
-          <label>Add ticker</label>
-          <input id="mp-input" type="text" placeholder="e.g. TSLA" onkeydown="if(event.key==='Enter'){addPortfolioTicker();}"/>
-        </div>
-        <button class="btn btn-primary" id="mp-add-btn" onclick="addPortfolioTicker()">Add</button>
-      </div>
-      <div id="mp-error" style="display:none;color:var(--red);font-size:12px;margin-top:6px"></div>
-      <div class="ticker-chips" id="mp-chips"></div>
-      <div class="hint" style="margin-top:8px">Up to 25 tickers per market. Remove a ticker by clicking the ✕ on its chip.</div>
-    </div>
 
     <!-- Telegram config -->
     <div class="setup-card">
@@ -609,23 +535,11 @@
 let activeTab   = 'us';
 let lastData    = { us: null, india: null };
 let pollTimer   = null;
-let _optionsLoaded = false;
 let nextScanIn  = 0;   // seconds until next auto-scan
 let scanTick    = null;
-let mpMarket    = 'us';   // active market for the My Portfolio settings card
 
 const CHART_US    = s => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(s)}`;
 const CHART_INDIA = s => `https://www.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(s)}`;
-
-// ── Top Assets (state) ────────────────────────────────────────────
-let trendRange = '1d';
-const TREND_SUB = { '1d':'today', '1w':'past week', '1mo':'past month', '6mo':'past 6 months', '1y':'past year', '5y':'past 5 years' };
-const TOP_ASSETS = [
-  { symbol: 'SPY', label: 'S&P 500' },
-  { symbol: 'QQQ', label: 'NASDAQ 100' },
-  { symbol: 'DIA', label: 'Dow Jones' },
-  { symbol: '^VIX', label: 'VIX' },
-];
 
 // ── Boot ──────────────────────────────────────────────────────────
 if (location.protocol === 'file:') {
@@ -636,55 +550,16 @@ fetchAll();
 schedulePoll();
 loadMarketTrend();
 setInterval(loadMarketTrend, 60000);
-renderPortfolioChips();
-fetchCustomPortfolio('us');
-fetchCustomPortfolio('india');
-updateMarketClocks();
-setInterval(updateMarketClocks, 1000);
 
-// ── Market clocks ────────────────────────────────────────────────
-function updateMarketClocks() {
-  renderMarketClock('us-clock', 'America/New_York', '🇺🇸 NYSE / NASDAQ', isUsMarketOpen);
-  renderMarketClock('india-clock', 'Asia/Kolkata', '🇮🇳 NSE', isIndiaMarketOpen);
-}
-
-function renderMarketClock(elId, tz, label, isOpenFn) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: true, weekday: 'short',
-  }).formatToParts(now);
-  const get = t => parts.find(p => p.type === t)?.value || '';
-  const time = `${get('hour')}:${get('minute')}:${get('second')} ${get('dayPeriod')}`;
-  const open = isOpenFn(now, tz);
-  el.innerHTML = `<span>${label}</span><span class="mc-time">${time}</span>
-    <span class="mc-status ${open ? 'open' : 'closed'}">${open ? 'Market Open' : 'Market Closed'}</span>`;
-}
-
-function _localHM(now, tz) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hour: 'numeric', minute: 'numeric', weekday: 'short', hour12: false,
-  }).formatToParts(now);
-  const get = t => parts.find(p => p.type === t)?.value || '';
-  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  return { day: dayNames.indexOf(get('weekday')), mins: parseInt(get('hour'),10)*60 + parseInt(get('minute'),10) };
-}
-
-// NYSE/NASDAQ regular hours: Mon–Fri, 9:30–16:00 ET
-function isUsMarketOpen(now) {
-  const { day, mins } = _localHM(now, 'America/New_York');
-  if (day < 1 || day > 5) return false;
-  return mins >= 9*60+30 && mins < 16*60;
-}
-
-// NSE regular hours: Mon–Fri, 9:15–15:30 IST
-function isIndiaMarketOpen(now) {
-  const { day, mins } = _localHM(now, 'Asia/Kolkata');
-  if (day < 1 || day > 5) return false;
-  return mins >= 9*60+15 && mins < 15*60+30;
-}
+// ── Top Assets ──────────────────────────────────────────────────────
+let trendRange = '1d';
+const TREND_SUB = { '1d':'today', '1w':'past week', '1mo':'past month', '6mo':'past 6 months', '1y':'past year', '5y':'past 5 years' };
+const TOP_ASSETS = [
+  { symbol: 'SPY', label: 'S&P 500' },
+  { symbol: 'QQQ', label: 'NASDAQ 100' },
+  { symbol: 'DIA', label: 'Dow Jones' },
+  { symbol: '^VIX', label: 'VIX' },
+];
 
 function setTrendRange(rng) {
   if (rng === trendRange) return;
@@ -754,70 +629,27 @@ async function loadAssetCard(asset) {
     if (deltaEl) deltaEl.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`;
 
     // build sparkline path with dashed baseline at first value
-    svg.innerHTML = buildSparkPath(closes, 300, 90);
+    const min = Math.min(...closes), max = Math.max(...closes);
+    const range = (max - min) || 1;
+    const w = 300, h = 90, pad = 4;
+    const pts = closes.map((c, i) => {
+      const x = (i / (closes.length - 1)) * (w - pad * 2) + pad;
+      const y = h - pad - ((c - min) / range) * (h - pad * 2);
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    });
+    const baseY = (h - pad - ((first - min) / range) * (h - pad * 2)).toFixed(2);
+    const color = up ? '#22c55e' : '#ef4444';
+    const areaPts = `${pad},${h-pad} ${pts.join(' ')} ${w-pad},${h-pad}`;
+    svg.innerHTML = `
+      <line x1="${pad}" y1="${baseY}" x2="${w-pad}" y2="${baseY}" stroke="#555" stroke-width="1" stroke-dasharray="3,3"/>
+      <polygon points="${areaPts}" fill="${color}" opacity="0.10"/>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
   } catch (e) {
     if (pctEl) pctEl.textContent = '—';
     if (priceEl) priceEl.textContent = 'Error';
     if (deltaEl) deltaEl.textContent = '';
     svg.innerHTML = '';
   }
-}
-
-// Build a sparkline (area + line + dashed baseline at first value) from an array of closes
-function buildSparkPath(closes, w, h, pad = 4) {
-  if (!closes || closes.length < 2) return '';
-  const first = closes[0], last = closes[closes.length - 1];
-  const up = last >= first;
-  const min = Math.min(...closes), max = Math.max(...closes);
-  const range = (max - min) || 1;
-  const pts = closes.map((c, i) => {
-    const x = (i / (closes.length - 1)) * (w - pad * 2) + pad;
-    const y = h - pad - ((c - min) / range) * (h - pad * 2);
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
-  });
-  const baseY = (h - pad - ((first - min) / range) * (h - pad * 2)).toFixed(2);
-  const color = up ? '#22c55e' : '#ef4444';
-  const areaPts = `${pad},${h-pad} ${pts.join(' ')} ${w-pad},${h-pad}`;
-  return `
-    <line x1="${pad}" y1="${baseY}" x2="${w-pad}" y2="${baseY}" stroke="#555" stroke-width="1" stroke-dasharray="3,3"/>
-    <polygon points="${areaPts}" fill="${color}" opacity="0.10"/>
-    <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-}
-
-// Fetch intraday candles for a symbol and draw a sparkline into a card.
-// In-memory cache + in-flight de-dupe: the same symbol often appears in
-// multiple cards (Best Opportunity + Top Picks), so this avoids firing
-// duplicate /api/chart requests for the same data.
-const _sparkCache = new Map();
-const _sparkInflight = new Map();
-const SPARK_CACHE_TTL = 45 * 1000;
-
-async function loadCardSpark(sym, svgId, w = 300, h = 60) {
-  const svg = document.getElementById(svgId);
-  if (!svg) return;
-  try {
-    const closes = await getSparkCloses(sym);
-    if (!closes || closes.length < 2) return;
-    svg.innerHTML = buildSparkPath(closes, w, h);
-  } catch (e) { /* leave blank */ }
-}
-
-function getSparkCloses(sym) {
-  const cached = _sparkCache.get(sym);
-  if (cached && (Date.now() - cached.ts) < SPARK_CACHE_TTL) return Promise.resolve(cached.closes);
-  if (_sparkInflight.has(sym)) return _sparkInflight.get(sym);
-
-  const p = fetch(`/api/chart?symbol=${encodeURIComponent(sym)}&range=1d`)
-    .then(r => r.ok ? r.json() : { candles: [] })
-    .then(d => {
-      const closes = (d.candles || []).map(c => c.close);
-      _sparkCache.set(sym, { ts: Date.now(), closes });
-      return closes;
-    })
-    .finally(() => _sparkInflight.delete(sym));
-
-  _sparkInflight.set(sym, p);
-  return p;
 }
 
 // ── Polling ───────────────────────────────────────────────────────
@@ -835,90 +667,6 @@ async function fetchAll() {
   await Promise.all([fetchSignals('us'), fetchSignals('india')]);
   updateHeader();
   fetchTopPicks();
-  if (activeTab === 'options') fetchOptions();
-}
-
-// ── Options ideas ─────────────────────────────────────────────────
-async function fetchOptions() {
-  try {
-    const r = await fetch('/api/options');
-    if (!r.ok) return;
-    renderOptions(await r.json());
-    _optionsLoaded = true;
-  } catch(e) {
-    // Server not yet ready
-  }
-}
-
-// Placeholder sample data so the tab isn't empty before real BUY/SELL
-// signals with listed options come through. Remove DEMO_OPTION_PICKS and
-// the `usingDemo` block in renderOptions once the tab is verified live.
-const DEMO_OPTION_PICKS = [
-  {
-    symbol: "AAPL", signal: "BUY", price: 200.12, pct: 1.2,
-    basis: "support", basis_price: 192.50,
-    near:    { expiry: "2026-06-20", days_to_expiry: 7,  strike: 195, type: "call", last_price: 5.2, bid: 5.0, ask: 5.4, mid_price: 5.2, iv_pct: 32.1, open_interest: 12000, volume: 3400, in_the_money: true },
-    monthly: { expiry: "2026-07-17", days_to_expiry: 34, strike: 200, type: "call", last_price: 8.1, bid: 7.9, ask: 8.3, mid_price: 8.1, iv_pct: 30.4, open_interest: 5000,  volume: 800,  in_the_money: false },
-  },
-  {
-    symbol: "GOOGL", signal: "SELL", price: 178.40, pct: -0.8,
-    basis: "resistance", basis_price: 184.00,
-    near:    { expiry: "2026-06-20", days_to_expiry: 7,  strike: 180, type: "put", last_price: 3.6, bid: 3.4, ask: 3.8, mid_price: 3.6, iv_pct: 28.7, open_interest: 9000, volume: 2100, in_the_money: true },
-    monthly: { expiry: "2026-07-17", days_to_expiry: 34, strike: 175, type: "put", last_price: 6.2, bid: 6.0, ask: 6.4, mid_price: 6.2, iv_pct: 27.2, open_interest: 4200, volume: 650,  in_the_money: false },
-  },
-];
-
-function renderOptions(data) {
-  const el    = document.getElementById('options-content');
-  let picks   = data.picks || [];
-  let usingDemo = false;
-  if (!picks.length) { picks = DEMO_OPTION_PICKS; usingDemo = true; }
-  document.getElementById('tb-options').textContent = usingDemo ? 'demo' : (picks.length || '—');
-
-  const calls = picks.filter(p => p.near?.type === 'call' || p.basis === 'support');
-  const puts  = picks.filter(p => p.near?.type === 'put'  || p.basis === 'resistance');
-
-  let html = '';
-  if (usingDemo) {
-    html += `<div class="extra-row warn" style="margin-bottom:14px">🧪 <b>DEMO DATA</b> — no live BUY/SELL options ideas right now, showing sample cards so you can preview the layout. Will switch to live data automatically once a portfolio/watchlist ticker has an active signal.</div>`;
-  }
-  if (calls.length) html += section('🟢 Calls to watch', calls.length, 'BUY signals — strikes near support') + `<div class="cards-grid">${calls.map(optionCard).join('')}</div>`;
-  if (puts.length)  html += section('🔴 Puts to watch', puts.length, 'SELL signals — strikes near resistance') + `<div class="cards-grid">${puts.map(optionCard).join('')}</div>`;
-  html += `<div class="page-end"></div>`;
-  el.innerHTML = html;
-}
-
-function optionLeg(leg) {
-  if (!leg) return `<div class="tg"><label>—</label><span>No contract found</span></div>`;
-  const premium = leg.mid_price ?? leg.last_price;
-  return `
-    <div class="tg"><label>Expiry</label><span>${leg.expiry} <small class="tg-eta">(${leg.days_to_expiry}d)</small></span></div>
-    <div class="tg"><label>Strike</label><span>$${leg.strike}</span></div>
-    <div class="tg"><label>Premium (mid)</label><span>${premium != null ? '$'+premium.toFixed(2) : '—'}</span></div>
-    <div class="tg"><label>IV / OI / Vol</label><span>${leg.iv_pct != null ? leg.iv_pct+'%' : '—'} / ${leg.open_interest ?? '—'} / ${leg.volume ?? '—'}</span></div>`;
-}
-
-function optionCard(p) {
-  const isCall = p.basis === 'support';
-  const cls = isCall ? 'buy' : 'sell';
-  const chg = p.price_pct;
-  return `
-  <div class="sig-card ${cls}" onclick="openChart('${p.symbol}',false)">
-    <div class="card-header">
-      <div class="card-left">
-        <div class="card-sym">${p.symbol} ${badge(p.signal)} <span class="chip ${isCall?'chip-setup':''}">${isCall ? 'CALL' : 'PUT'}</span></div>
-      </div>
-      <div class="card-right">
-        <div class="card-price">$${p.price}</div>
-        ${chg != null ? `<div class="card-chg ${chg>=0?'up':'down'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(2)}%</div>` : ''}
-      </div>
-    </div>
-    <div class="card-why">Strike anchored near ${p.basis} ($${p.basis_price}). ${isCall ? 'If price holds/bounces off support, this call gains.' : 'If price stalls/rejects at resistance, this put gains.'}</div>
-    <div class="card-chips" style="margin-bottom:8px"><span class="chip chip-setup">Near-term</span></div>
-    <div class="trade-grid">${optionLeg(p.near)}</div>
-    ${p.monthly ? `<div class="card-chips" style="margin-bottom:8px"><span class="chip chip-setup">~3-4 weeks</span></div><div class="trade-grid">${optionLeg(p.monthly)}</div>` : ''}
-    <div class="extra-row warn">⚠️ Options can expire worthless. Size positions small and verify live quotes before trading.</div>
-  </div>`;
 }
 
 // ── Top 5 Picks ───────────────────────────────────────────────────
@@ -955,11 +703,6 @@ function renderTopPicks(data) {
 
   el.innerHTML = section('🔥 Top 5 Picks Today', picks.length, 'Your portfolio + curated large-caps — highest-conviction BUYs')
     + `<div class="toppicks-row">${picks.map(topPickCard).join('')}</div>`;
-
-  picks.forEach(s => {
-    const sym = s.symbol || s.ticker;
-    loadCardSpark(sym, `tp-svg-${sym}`, 300, 46);
-  });
 }
 
 function topPickCard(s) {
@@ -971,8 +714,7 @@ function topPickCard(s) {
   <div class="tp-card" onclick="openChart('${sym}',false)">
     <span class="tp-toppick-badge">★ Top Pick</span>
     <div class="tp-sym">${sym} ${badge(s.label)}</div>
-    ${s.price != null ? `<div class="tp-price">${fmt(s.price,false)} ${s.pct != null ? `<span class="tp-pct ${s.pct >= 0 ? 'green' : 'red'}">${s.pct >= 0 ? '+' : ''}${s.pct}%</span>` : ''} <span class="tp-live"><span class="live-dot-sm"></span>Live</span></div>` : ''}
-    <div class="tp-spark"><svg viewBox="0 0 300 46" preserveAspectRatio="none" id="tp-svg-${sym}"></svg></div>
+    ${s.price != null ? `<div class="tp-price">${fmt(s.price,false)} ${s.pct != null ? `<span class="tp-pct ${s.pct >= 0 ? 'green' : 'red'}">${s.pct >= 0 ? '+' : ''}${s.pct}%</span>` : ''}</div>` : ''}
     ${(s.reasons && s.reasons.length) ? `<div class="tp-reason">📌 ${s.reasons.slice(0,2).join(' · ')}</div>` : ''}
     <div class="tp-chips">
       ${s.setup_type ? `<span class="chip chip-setup">${s.setup_type}</span>` : ''}
@@ -984,12 +726,11 @@ function topPickCard(s) {
     </div>` : ''}
     <div class="trade-grid">
       ${s.entry_zone ? `<div class="tg"><label>Entry zone</label><span>${s.entry_zone}</span></div>` : ''}
-      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,false)}${s.target_1_date ? ` <small class="tg-eta">~${s.target_1_date}</small>` : ''}</span></div>` : ''}
-      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,false)}${s.target_2_date ? ` <small class="tg-eta">~${s.target_2_date}</small>` : ''}</span></div>` : ''}
+      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,false)}</span></div>` : ''}
+      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,false)}</span></div>` : ''}
       ${s.invalidation != null ? `<div class="tg"><label>Invalidation</label><span>${fmt(s.invalidation,false)}</span></div>` : ''}
     </div>
     ${s.beginner_note ? `<div class="beginner-note"><span class="bn-icon">💡</span><span>${s.beginner_note}</span></div>` : ''}
-    ${cardExtras(s, false)}
   </div>`;
 }
 
@@ -1032,7 +773,7 @@ function updateHeader() {
     dot.className = 'live-dot';
     const d = lastData[activeTab];
     if (d?.last_updated) {
-      const ago = Math.round((Date.now() - new Date(d.last_updated + 'Z')) / 60000);
+      const ago = Math.round((Date.now() - new Date(d.last_updated)) / 60000);
       label.textContent = ago < 1 ? 'Just updated' : `Updated ${ago}m ago`;
     }
     banner.style.display = 'none';
@@ -1062,7 +803,7 @@ function renderStatsBar(market, data) {
   const buys  = sigs.filter(s => s.label.includes('BUY')).length;
   const sells = sigs.filter(s => s.label.includes('SELL')).length;
   const holds = sigs.filter(s => s.label === 'HOLD').length;
-  const ts    = data.last_updated ? new Date(data.last_updated + 'Z').toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+  const ts    = data.last_updated ? new Date(data.last_updated).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
 
   el.innerHTML = `
     <div class="stat-item"><div class="stat-val">${sigs.length}</div><div class="stat-lbl">Tracked</div></div>
@@ -1122,11 +863,6 @@ function renderContent(market, data) {
 
   let html = '';
 
-  // Sector concentration warning
-  if (data.sector_concentration_warning) {
-    html += `<div class="sector-warn">⚠️ ${data.sector_concentration_warning}</div>`;
-  }
-
   // Best pick
   if (best) {
     const profPct = best.profit_pct ?? ((best.resistance - best.price) / best.price * 100).toFixed(1);
@@ -1141,10 +877,8 @@ function renderContent(market, data) {
           <div class="best-right">
             <div class="best-price">${fmt(best.price, india)}</div>
             <div class="best-chg ${best.pct>=0?'up':'down'}">${best.pct>=0?'▲':'▼'} ${Math.abs(best.pct).toFixed(2)}%</div>
-            <div class="best-live"><span class="live-dot-sm"></span>Live</div>
           </div>
         </div>
-        <div class="best-spark"><svg viewBox="0 0 600 72" preserveAspectRatio="none" id="best-svg-${best.symbol}"></svg></div>
         <div class="best-why">${best.why}</div>
         <div class="best-metrics">
           <div class="bm"><div class="bm-label">Target</div><div class="bm-val green">${fmt(best.resistance,india)} <small style="font-size:11px">(+${profPct}%)</small></div></div>
@@ -1171,136 +905,6 @@ function renderContent(market, data) {
   // Penny
   if (penny.length) html += section('⚡ Penny Picks', penny.length, india ? 'Under ₹30 — small size only, high risk' : 'Under $5 — small size only, high risk') + `<div class="cards-grid">${penny.map(p=>pennyCard(p,india)).join('')}</div>`;
 
-  html += `<div class="page-end"></div>`;
-  el.innerHTML = html;
-
-  if (best) loadCardSpark(india ? `${best.symbol}.NS` : best.symbol, `best-svg-${best.symbol}`, 600, 72);
-}
-
-// ── My Portfolio (user-defined custom watchlist, stored in localStorage) ──
-function customPortfolioKey(market) { return 'tt_custom_portfolio_' + market; }
-
-function getCustomPortfolio(market) {
-  try { return JSON.parse(localStorage.getItem(customPortfolioKey(market))) || []; }
-  catch(e) { return []; }
-}
-
-function setCustomPortfolio(market, syms) {
-  localStorage.setItem(customPortfolioKey(market), JSON.stringify(syms));
-}
-
-function selPortfolioMarket(m) {
-  mpMarket = m;
-  document.getElementById('mp-opt-us').classList.toggle('sel', m === 'us');
-  document.getElementById('mp-opt-india').classList.toggle('sel', m === 'india');
-  showMpError('');
-  renderPortfolioChips();
-}
-
-function renderPortfolioChips() {
-  const syms = getCustomPortfolio(mpMarket);
-  const el = document.getElementById('mp-chips');
-  el.innerHTML = syms.length
-    ? syms.map(s => `<div class="ticker-chip">${s}<span class="x" onclick="removePortfolioTicker('${s}')">✕</span></div>`).join('')
-    : `<div style="font-size:12px;color:var(--muted)">No tickers added yet — add one above.</div>`;
-}
-
-function showMpError(msg) {
-  const el = document.getElementById('mp-error');
-  if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
-  el.textContent = msg;
-  el.style.display = 'block';
-}
-
-async function addPortfolioTicker() {
-  const input = document.getElementById('mp-input');
-  const btn = document.getElementById('mp-add-btn');
-  const raw = input.value.trim();
-  showMpError('');
-  if (!raw) return;
-
-  const syms = getCustomPortfolio(mpMarket);
-  if (syms.length >= 25) { showMpError('Max 25 tickers per market.'); return; }
-
-  const cleaned = raw.toUpperCase().replace(/\.NS$/, '');
-
-  btn.disabled = true;
-  const prevLabel = btn.textContent;
-  btn.textContent = '...';
-  try {
-    let sym = null;
-    try {
-      const r = await fetch(`/api/symbol-lookup?q=${encodeURIComponent(raw)}&market=${mpMarket}`);
-      const data = await r.json();
-      const matches = data.matches || [];
-      // Prefer an exact symbol match (e.g. "TSLA" -> TSLA), otherwise take the top result.
-      const exact = matches.find(m => m.symbol === cleaned);
-      sym = (exact || matches[0] || {}).symbol || null;
-    } catch (e) {
-      // Lookup service unreachable — fall back to treating input as a literal ticker.
-      sym = cleaned;
-    }
-
-    if (!sym) {
-      showMpError(`Couldn't find a ${mpMarket === 'india' ? 'NSE' : 'US'} ticker matching "${raw}". Try the exact symbol.`);
-      return;
-    }
-    if (syms.includes(sym)) {
-      showMpError(`${sym} is already in your portfolio.`);
-      input.value = '';
-      return;
-    }
-
-    syms.push(sym);
-    setCustomPortfolio(mpMarket, syms);
-    input.value = '';
-    renderPortfolioChips();
-    fetchCustomPortfolio(mpMarket);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = prevLabel;
-  }
-}
-
-function removePortfolioTicker(sym) {
-  const syms = getCustomPortfolio(mpMarket).filter(s => s !== sym);
-  setCustomPortfolio(mpMarket, syms);
-  renderPortfolioChips();
-  fetchCustomPortfolio(mpMarket);
-}
-
-async function fetchCustomPortfolio(market) {
-  const syms = getCustomPortfolio(market);
-  const el = document.getElementById(market + '-myportfolio');
-  if (!el) return;
-  if (!syms.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="loading-box" style="padding:24px"><div class="big-spinner"></div><p>Loading your portfolio…</p></div>`;
-  try {
-    const r = await fetch(`/api/custom-signals?market=${market}&symbols=${syms.join(',')}`);
-    const data = await r.json();
-    renderMyPortfolio(market, data, syms);
-  } catch(e) {
-    el.innerHTML = `<div class="error-box"><div class="err-icon">⚠️</div><p>Couldn't load your portfolio. Try again shortly.</p></div>`;
-  }
-}
-
-function renderMyPortfolio(market, data, syms) {
-  const el = document.getElementById(market + '-myportfolio');
-  const india = market === 'india';
-  if (data.error && !(data.signals || []).length) {
-    el.innerHTML = `<div class="error-box"><div class="err-icon">⚠️</div><p>${data.error}</p></div>`;
-    return;
-  }
-  const sigs = data.signals || [];
-  let html = section('📋 My Portfolio', sigs.length, 'Your custom watchlist — saved on this device');
-  if (data.sector_concentration_warning) {
-    html += `<div class="sector-warn">⚠️ ${data.sector_concentration_warning}</div>`;
-  }
-  if (sigs.length) {
-    html += `<div class="cards-grid">${sigs.map(s => sigCard(s, india)).join('')}</div>`;
-  } else {
-    html += `<div class="loading-box" style="padding:20px"><p>No data yet for: ${syms.join(', ')}</p></div>`;
-  }
   html += `<div class="page-end"></div>`;
   el.innerHTML = html;
 }
@@ -1353,8 +957,8 @@ function sigCard(s, india) {
     </div>` : ''}
     ${(s.entry_zone || s.target_1 != null) ? `<div class="trade-grid">
       ${s.entry_zone ? `<div class="tg"><label>Entry zone</label><span>${s.entry_zone}</span></div>` : ''}
-      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,india)}${s.target_1_date ? ` <small class="tg-eta">~${s.target_1_date}</small>` : ''}</span></div>` : ''}
-      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,india)}${s.target_2_date ? ` <small class="tg-eta">~${s.target_2_date}</small>` : ''}</span></div>` : ''}
+      ${s.target_1 != null ? `<div class="tg"><label>Target 1</label><span>${fmt(s.target_1,india)}</span></div>` : ''}
+      ${s.target_2 != null ? `<div class="tg"><label>Target 2</label><span>${fmt(s.target_2,india)}</span></div>` : ''}
       ${s.invalidation != null ? `<div class="tg"><label>Invalidation</label><span>${fmt(s.invalidation,india)}</span></div>` : ''}
     </div>` : ''}
     ${s.beginner_note ? `<div class="beginner-note"><span class="bn-icon">💡</span><span>${s.beginner_note}</span></div>` : ''}
@@ -1363,53 +967,7 @@ function sigCard(s, india) {
       <div class="cs ${scrCls}"><label>Score</label><span>${s.score}</span></div>
       <div class="cs ${volCls}"><label>Volume</label><span>${s.vol_ratio ? s.vol_ratio+'x' : '—'}</span></div>
     </div>
-    ${cardExtras(s, india)}
   </div>`;
-}
-
-// ── Shared "extras" block: signal-change, multi-timeframe, sizing, news, backtest ──
-function cardExtras(s, india) {
-  const hasExtra = s.signal_change || s.mtf_note || s.sector || s.shares_per_100_risk || s.earnings_date || (s.headlines && s.headlines.length) || s.reddit?.mentions;
-  if (!hasExtra && !s.symbol) return '';
-  return `<div class="card-extra">
-    ${s.signal_change ? `<div class="extra-row change">🔄 Signal changed: ${s.signal_change}</div>` : ''}
-    ${s.mtf_note ? `<div class="extra-row ${s.mtf_aligned===false?'warn':''}">${s.mtf_aligned ? '✓' : '⚠️'} ${s.mtf_note}</div>` : ''}
-    ${(s.sector || s.shares_per_100_risk || s.earnings_date || s.reddit?.mentions) ? `<div class="extra-meta">
-      ${s.sector ? `<span class="meta-chip">${s.sector}</span>` : ''}
-      ${s.shares_per_100_risk ? `<span class="meta-chip">~${s.shares_per_100_risk} sh per $100 risk</span>` : ''}
-      ${s.earnings_date ? `<span class="meta-chip">📅 Earnings ~${String(s.earnings_date).slice(0,10)}</span>` : ''}
-      ${s.reddit?.mentions ? `<span class="meta-chip">👽 ${s.reddit.mentions} Reddit mentions (#${s.reddit.rank})</span>` : ''}
-    </div>` : ''}
-    ${(s.headlines && s.headlines.length) ? `<div class="extra-news">📰 ${s.headlines[0]}</div>` : ''}
-    <button class="btn-backtest" onclick="event.stopPropagation(); runBacktest('${s.symbol}', ${india}, this)">📊 Backtest this signal</button>
-    <div class="backtest-result"></div>
-  </div>`;
-}
-
-// ── Backtest: replay scoring logic over history, show win-rate by label ──
-async function runBacktest(symbol, india, btn) {
-  const out = btn.nextElementSibling;
-  btn.disabled = true; btn.textContent = '⏳ Running backtest…';
-  out.innerHTML = '';
-  try {
-    const r = await fetch(`/api/backtest?symbol=${symbol}&market=${india?'india':'us'}&hold_days=10`);
-    const data = await r.json();
-    if (data.error) { out.innerHTML = `<span style="color:var(--red)">${data.error}</span>`; }
-    else {
-      const rows = Object.entries(data.results || {});
-      if (!rows.length) { out.innerHTML = `<span>No historical occurrences of this signal found.</span>`; }
-      else {
-        out.innerHTML = `<div>Past occurrences of each signal, ${data.hold_days}-trading-day forward return (${data.period} history):</div>
-        <table><tr><th>Signal</th><th>Times seen</th><th>Avg return</th><th>Win rate</th></tr>
-        ${rows.map(([label,r]) => `<tr><td>${label}</td><td>${r.count}</td><td style="color:${r.avg_return_pct>=0?'var(--green)':'var(--red)'}">${r.avg_return_pct>=0?'+':''}${r.avg_return_pct}%</td><td>${r.win_rate_pct!=null? r.win_rate_pct+'%':'—'}</td></tr>`).join('')}
-        </table>
-        <div style="margin-top:4px;color:var(--muted2)">Past performance is not a guarantee of future results.</div>`;
-      }
-    }
-  } catch(e) {
-    out.innerHTML = `<span style="color:var(--red)">Backtest failed: ${e}</span>`;
-  }
-  btn.disabled = false; btn.textContent = '📊 Backtest this signal';
 }
 
 // ── Penny card ────────────────────────────────────────────────────
@@ -1465,11 +1023,10 @@ function openChart(sym, india) {
 // ── Tab switching ─────────────────────────────────────────────────
 function switchTab(tab) {
   activeTab = tab;
-  ['us','india','options','setup'].forEach(t => {
+  ['us','india','setup'].forEach(t => {
     document.getElementById('tab-'+t)?.classList.toggle('active', t===tab);
     document.getElementById('panel-'+t)?.classList.toggle('active', t===tab);
   });
-  if (tab === 'options' && !_optionsLoaded) fetchOptions();
   updateHeader();
 }
 

@@ -17,12 +17,36 @@ Hardening checklist:
   [x] Market filter — BUY signals suppressed when SPY drops >1.5%
   [x] ATR-based stop loss — stops sized to each stock's true volatility
 """
-import urllib.request, urllib.parse, sys, os, time, logging
+import urllib.request, urllib.parse, sys, os, time, json, logging
 from datetime import datetime, timedelta
 
 # ── Config ────────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = "8955387419:AAHEmmHoibcYkv2MRcFElzX__4TOrP55PjQ"
-TELEGRAM_CHAT_ID = "1578063059"
+_DIR = os.path.dirname(os.path.abspath(__file__))
+_CFG_FILE = os.path.join(_DIR, "config.json")
+
+def _load_config():
+    if os.path.exists(_CFG_FILE):
+        try:
+            return json.load(open(_CFG_FILE))
+        except Exception:
+            pass
+    return {}
+
+def _cred(env_key, *cfg_keys, default=""):
+    """Prefer the env var, then config.json (accepts both key styles), then default."""
+    val = os.environ.get(env_key)
+    if val:
+        return val
+    cfg = _load_config()
+    for k in cfg_keys:
+        if cfg.get(k):
+            return cfg[k]
+    return default
+
+TELEGRAM_TOKEN   = _cred("TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_TOKEN", "telegram_token",
+                         default="8955387419:AAHEmmHoibcYkv2MRcFElzX__4TOrP55PjQ")
+TELEGRAM_CHAT_ID = _cred("TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID", "telegram_chat_id",
+                         default="1578063059")
 PORTFOLIO        = ["AAPL", "GOOGL", "PLTR", "VOO", "NVDA", "AMD", "AMZN", "CRM"]
 
 WATCHLIST = [
@@ -43,7 +67,7 @@ PENNY_WATCHLIST = [
     # Cannabis
     "TLRY","CGC","SNDL","ACB","CRLBF","CURLF","GTBIF","TCNNF","AYRWF","NEPT",
     # Crypto miners
-    "MARA","RIOT","HIVE","HUT","BTBT","CIFR","WULF","CLSK","IREN","BITF",
+    "MARA","RIOT","HIVE","HUT","BTBT","CIFR","WULF","CLSK","IREN","KEEL",
     # High-vol momentum
     "GFAI","SHOT","ILUS","CODA","GFAI","IDAI","NTRB","XELA","KOSS","BBAI",
     # Small cap tech
@@ -90,6 +114,14 @@ install_deps()
 import yfinance as yf
 import pandas as pd
 import numpy as np
+
+# Options strike picker — shared with the dashboard server. Safe to import:
+# server.py only starts the HTTP server / background loop under __main__.
+try:
+    from server import get_options_suggestion
+except Exception as e:
+    log.warning(f"Options suggestions unavailable: {e}")
+    get_options_suggestion = None
 
 
 # ── Validation helpers ────────────────────────────────────────────
@@ -534,8 +566,80 @@ def scan_watchlist():
 
 # ── Message builder ───────────────────────────────────────────────
 
-def build_message(signals, penny_picks, watchlist_picks=None, spy_pct=None, market_bearish=False):
+def enrich_signal(s):
+    """Add richer beginner-friendly fields (confidence, risk_band, setup_type,
+    entry_zone, target_1/2, beginner_note) to an existing signal dict.
+    Mirrors server.build_signal so the dashboard and Telegram stay consistent."""
+    score      = s.get("score", 0)
+    rsi        = s.get("rsi", 50)
+    price      = s.get("price", 0) or 0
+    support    = s.get("support", price * 0.95)
+    resistance = s.get("resistance", price * 1.05)
+    stop_loss  = s.get("stop_loss", round(price * 0.95, 2))
+    label      = s.get("label", "HOLD")
+    pct        = s.get("pct", 0) or 0
+    atr        = s.get("atr") or (price * 0.02 if price else 1)
+    safe_price = price if price else 1
+
+    if "BUY" in label:
+        rsi_contrib = max(0, min(40, int((rsi - 30) / 40 * 40)))
+    else:
+        rsi_contrib = max(0, min(40, int((70 - rsi) / 40 * 40)))
+    confidence = min(95, max(10, abs(score) * 12 + rsi_contrib))
+
+    if atr / safe_price > 0.04 or abs(pct) > 3:
+        risk_band = "High"
+    elif atr / safe_price > 0.02 or abs(pct) > 1.5:
+        risk_band = "Medium"
+    else:
+        risk_band = "Low"
+
+    if score >= 4:
+        setup_type = "Breakout" if price > resistance * 0.98 else "Momentum"
+    elif score <= -2:
+        setup_type = "Breakdown"
+    elif score <= 1 and label == "HOLD":
+        setup_type = "Range"
+    elif rsi < 35:
+        setup_type = "Reversal"
+    else:
+        setup_type = "Trend"
+
+    entry_low  = round(safe_price * 0.99, 2)
+    entry_high = round(safe_price, 2)
+    entry_zone = f"${entry_low:.2f}–${entry_high:.2f}"
+
+    target_1 = round(price + (resistance - price) * 0.5, 2)
+    target_2 = round(resistance, 2)
+
+    if "BUY" in label:
+        beginner_note = (f"Consider entering between {entry_zone}. First target is "
+                         f"${target_1:.2f}. Exit if price falls below ${stop_loss:.2f}.")
+    elif "SELL" in label:
+        beginner_note = (f"This stock is showing weakness. If you hold it, consider "
+                         f"setting a stop at ${stop_loss:.2f}.")
+    else:
+        beginner_note = (f"No clear signal right now. Watch for break above "
+                         f"${resistance:.2f}.")
+
+    return {
+        **s,
+        "setup_type":    setup_type,
+        "risk_band":     risk_band,
+        "confidence":    confidence,
+        "entry_zone":    entry_zone,
+        "target_1":      target_1,
+        "target_2":      target_2,
+        "beginner_note": beginner_note,
+    }
+
+
+def build_message(signals, penny_picks=None, watchlist_picks=None, spy_pct=None, market_bearish=False):
+    penny_picks = penny_picks or []
     now   = datetime.now().strftime("%a, %b %-d %Y")
+    signals = [enrich_signal(s) for s in signals]
+    if watchlist_picks:
+        watchlist_picks = [enrich_signal(s) for s in watchlist_picks]
     buys  = [s for s in signals if "BUY"  in s.get("label", "")]
     sells = [s for s in signals if "SELL" in s.get("label", "")]
     holds = [s for s in signals if s.get("label") == "HOLD"]
@@ -591,35 +695,54 @@ def build_message(signals, penny_picks, watchlist_picks=None, spy_pct=None, mark
                 lines.append(f'  Take profit near resistance ${s["resistance"]}')
                 lines.append(f'  Risk: could fall to support ${s["support"]}')
 
-    # ── Full portfolio ────────────────────────────────────────────
-    lines += ["", "<b>── PORTFOLIO ────────────────────</b>",
-              "<code>TICKER  PRICE      DAY     SIGNAL</code>"]
-    for s in signals:
-        day_chg = f'+{s["pct"]}%' if s["pct"] >= 0 else f'{s["pct"]}%'
-        warn    = " *" if s.get("rsi", 0) > 72 else ""
-        lines.append(
-            f'<code>{s["symbol"]:<6}  ${s["price"]:<9}  {day_chg:<7}  {s["label"]}{warn}</code>'
-        )
-    # Targets for actionable signals
-    for s in signals:
-        if "BUY" in s.get("label", ""):
-            pct = round((s["resistance"] - s["price"]) / s["price"] * 100, 1)
-            lines.append(f'  {s["symbol"]}: Target ${s["resistance"]} (+{pct}%)  Stop ${s["stop_loss"]}')
-        elif "SELL" in s.get("label", ""):
-            lines.append(f'  {s["symbol"]}: Sell near ${s["resistance"]}')
+    # ── Options ideas ─────────────────────────────────────────────
+    if get_options_suggestion and action_stocks:
+        opt_lines = []
+        for s in action_stocks[:6]:  # cap — option chain fetches are slow
+            o = get_options_suggestion(s["symbol"], s)
+            if not o: continue
+            kind = "CALL" if o["basis"] == "support" else "PUT"
+            opt_lines.append(f'<b>{s["symbol"]}</b> {kind}  — strike near {o["basis"]} ${o["basis_price"]}')
+            for leg, tag in ((o.get("near"), "Near-term"), (o.get("monthly"), "~3-4wk")):
+                if not leg: continue
+                prem = leg.get("mid_price") if leg.get("mid_price") is not None else leg.get("last_price")
+                prem_s = f"${prem:.2f}" if prem is not None else "—"
+                opt_lines.append(f'  {tag} {leg["expiry"]} (${leg["strike"]} {kind.lower()}): premium ~{prem_s}, IV {leg.get("iv_pct","—")}%')
+        if opt_lines:
+            lines += ["", "<b>── OPTIONS IDEAS (educational) ──</b>"]
+            lines += opt_lines
+            lines.append("<i>Not a recommendation — verify live quotes before trading.</i>")
 
-    # ── 3 stocks to watch ─────────────────────────────────────────
-    if watchlist_picks:
-        lines += ["", "<b>── 3 STOCKS TO WATCH ───────────</b>",
-                  "<i>(outside your portfolio)</i>"]
-        for s in watchlist_picks:
-            pct = round((s["resistance"] - s["price"]) / s["price"] * 100, 1)
-            day = f'+{s["pct"]}%' if s["pct"] >= 0 else f'{s["pct"]}%'
+    # ── Full portfolio ────────────────────────────────────────────
+    lines += ["", "<b>── PORTFOLIO ────────────────────</b>"]
+    for s in signals:
+        arrow   = "▲" if s["pct"] >= 0 else "▼"
+        day_chg = f'{arrow}{abs(s["pct"])}%'
+        lines += [
+            "",
+            f'<b>{s["symbol"]}</b>  ${s["price"]}  {day_chg}  <b>{s["label"]}</b>',
+            f'  Setup: {s["setup_type"]}  |  Risk: {s["risk_band"]}  |  Confidence: {s["confidence"]}%',
+            f'  Entry: {s["entry_zone"]}  |  Target: ${s["target_1"]} / ${s["target_2"]}  |  Stop: ${s["stop_loss"]}',
+            f'  💡 {s["beginner_note"]}',
+        ]
+
+    # ── Top picks / suppression ───────────────────────────────────
+    if market_bearish:
+        lines += ["", "<b>📉 BUY signals suppressed — market is weak. Sit tight.</b>",
+                  "Watch these levels for when market recovers:"]
+        watch = [s for s in signals if "BUY" not in s.get("label", "")][:5]
+        for s in watch:
+            lines.append(f'• {s["symbol"]}: watch ${s["resistance"]} resistance')
+    elif watchlist_picks:
+        lines += ["", "<b>🔥 TOP PICKS TODAY</b>"]
+        for i, s in enumerate(watchlist_picks, 1):
+            arrow = "↑" if s["pct"] >= 0 else "↓"
+            day   = f'{arrow}{abs(s["pct"])}%'
             lines += [
-                "",
-                f'<b>{s["symbol"]}</b>  ${s["price"]}  ({day})',
-                f'  Target: ${s["resistance"]}  (+{pct}%)   Stop: ${s["stop_loss"]}',
-                f'  Why:    <i>{s["why"]}</i>',
+                f'{i}. {s["symbol"]} — {s["label"]}  ${s["price"]}  {day}',
+                f'   Setup: {s["setup_type"]} | Confidence: {s["confidence"]}% | Risk: {s["risk_band"]}',
+                f'   Entry: {s["entry_zone"]} | T1: ${s["target_1"]} | T2: ${s["target_2"]} | Stop: ${s["stop_loss"]}',
+                f'   💡 {s["beginner_note"]}',
             ]
 
     # ── Penny picks ───────────────────────────────────────────────
@@ -639,11 +762,17 @@ def build_message(signals, penny_picks, watchlist_picks=None, spy_pct=None, mark
     return "\n".join(lines)
 
 
-# ── Main ──────────────────────────────────────────────────────────
+# ── Fetch ─────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
-    log.info("=== McLean Trade Bot starting ===")
+def fetch_signals():
+    """
+    Run the full market scan and return all the data needed to build a report.
+    Returns a dict with keys: signals, watchlist_picks, penny_picks,
+    spy_pct, market_bearish.
 
+    This is the shared data-gathering step used by both the daily alert
+    (main()) and the on-demand /scan bot command.
+    """
     # ── Market mood check ─────────────────────────────────────────
     spy_pct, market_bearish = get_market_mood()
 
@@ -663,10 +792,6 @@ if __name__ == "__main__":
         else:
             log.warning(f"  {sym}: no valid signal")
 
-    if not signals:
-        log.error("No valid signals from portfolio — aborting alert.")
-        sys.exit(1)
-
     # ── Watchlist + penny scans ───────────────────────────────────
     watchlist_picks = scan_watchlist()
     # Suppress watchlist BUY picks on bearish days too
@@ -676,6 +801,35 @@ if __name__ == "__main__":
 
     penny_picks = scan_penny_stocks()
     log.info(f"Penny picks: {[p['symbol'] for p in penny_picks]}")
+
+    return {
+        "signals":         signals,
+        "watchlist_picks": watchlist_picks,
+        "penny_picks":     penny_picks,
+        "spy_pct":         spy_pct,
+        "market_bearish":  market_bearish,
+    }
+
+
+# ── Main ──────────────────────────────────────────────────────────
+
+def main():
+    if not TELEGRAM_TOKEN:
+        log.warning("No Telegram token in env or config.json — exiting cleanly without sending alerts.")
+        sys.exit(0)
+
+    log.info("=== McLean Trade Bot starting ===")
+
+    data = fetch_signals()
+    signals         = data["signals"]
+    watchlist_picks = data["watchlist_picks"]
+    penny_picks     = data["penny_picks"]
+    spy_pct         = data["spy_pct"]
+    market_bearish  = data["market_bearish"]
+
+    if not signals:
+        log.error("No valid signals from portfolio — aborting alert.")
+        sys.exit(1)
 
     # ── Standalone BUY alert ──────────────────────────────────────
     buys = [s for s in signals if "BUY" in s.get("label", "")]
@@ -727,3 +881,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     log.info("=== McLean Trade Bot done ===")
+
+
+if __name__ == "__main__":
+    main()

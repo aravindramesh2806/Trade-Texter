@@ -30,8 +30,8 @@ import sys, os, time, logging, urllib.request, urllib.parse
 from datetime import date
 
 # ── Config ────────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = "YOUR_BOT_TOKEN_HERE"
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"
+TELEGRAM_TOKEN   = "8955387419:AAHEmmHoibcYkv2MRcFElzX__4TOrP55PjQ"
+TELEGRAM_CHAT_ID = "1578063059"
 
 # LLM provider — change to "openai" if you have OpenAI key instead
 LLM_PROVIDER  = "anthropic"

@@ -29,8 +29,8 @@ logging.basicConfig(
 log = logging.getLogger("intraday")
 
 # ── Config ───────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = "YOUR_BOT_TOKEN_HERE"
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"
+TELEGRAM_TOKEN   = "8955387419:AAHEmmHoibcYkv2MRcFElzX__4TOrP55PjQ"
+TELEGRAM_CHAT_ID = "1578063059"
 PORTFOLIO        = ["AAPL", "GOOGL", "PLTR", "VOO", "NVDA", "AMD", "AMZN", "CRM"]
 
 RSI_OVERSOLD   = 35
@@ -82,6 +82,27 @@ def install_deps():
 install_deps()
 import yfinance as yf
 import numpy as np
+
+# Options strike picker — shared with the dashboard server. Safe to import:
+# server.py only starts the HTTP server / background loop under __main__.
+try:
+    from server import get_options_suggestion
+except Exception as e:
+    log.warning(f"Options suggestions unavailable: {e}")
+    get_options_suggestion = None
+
+def _options_line(sym, label, detail):
+    """One-line options idea for a freshly-changed BUY/SELL signal."""
+    if not get_options_suggestion or not detail:
+        return None
+    o = get_options_suggestion(sym, detail)
+    if not o or not o.get("near"):
+        return None
+    kind = "CALL" if o["basis"] == "support" else "PUT"
+    leg  = o["near"]
+    prem = leg.get("mid_price") if leg.get("mid_price") is not None else leg.get("last_price")
+    prem_s = f"${prem:.2f}" if prem is not None else "—"
+    return f'  Options idea: {kind} ${leg["strike"]} exp {leg["expiry"]} (premium ~{prem_s}) — strike near {o["basis"]} ${o["basis_price"]}'
 import pandas as pd
 
 
@@ -149,6 +170,14 @@ def get_daily_signal_label(sym):
     Quick daily-bar signal (BUY / SELL / HOLD) using same logic as morning alert.
     Used to detect label changes between scans.
     """
+    detail = get_daily_signal_detail(sym)
+    return detail["label"] if detail else None
+
+def get_daily_signal_detail(sym):
+    """
+    Same as get_daily_signal_label but returns price/support/resistance too,
+    so callers can build an options strike suggestion when the label changes.
+    """
     try:
         hist = yf.Ticker(sym).history(period="1y")
         if hist is None or len(hist) < 30:
@@ -189,11 +218,13 @@ def get_daily_signal_label(sym):
         if near_support:    score += 1
         if near_resistance: score -= 1
 
-        if   score >= 4:  return "STRONG BUY"
-        elif score >= 2:  return "BUY"
-        elif score <= -4: return "STRONG SELL"
-        elif score <= -2: return "SELL"
-        else:             return "HOLD"
+        if   score >= 4:  label = "STRONG BUY"
+        elif score >= 2:  label = "BUY"
+        elif score <= -4: label = "STRONG SELL"
+        elif score <= -2: label = "SELL"
+        else:             label = "HOLD"
+
+        return {"label": label, "price": price, "support": support, "resistance": resistance}
     except Exception as e:
         log.warning(f"{sym} daily signal error: {e}")
         return None
@@ -303,9 +334,11 @@ def build_change_message(label_changes, new_events, now_str):
     if label_changes:
         lines.append("")
         lines.append("<b>── SIGNAL CHANGES ───────────────</b>")
-        for sym, old_lbl, new_lbl, price in label_changes:
+        for sym, old_lbl, new_lbl, price, detail in label_changes:
             day_indicator = "  <-- BUY" if "BUY" in new_lbl else ("  <-- SELL NOW" if "SELL" in new_lbl else "")
             lines.append(f'<b>{sym}</b>  ${price}   {old_lbl} -> <b>{new_lbl}</b>{day_indicator}')
+            opt_line = _options_line(sym, new_lbl, detail)
+            if opt_line: lines.append(opt_line)
 
     if new_events:
         lines.append("")
@@ -325,8 +358,8 @@ def build_standalone_alerts(label_changes, new_events, now_str):
     Returns (buy_msg, sell_msg) — standalone notifications sent before the main update.
     Either can be None if no relevant signals.
     """
-    buy_changes  = [(sym, old, new, price) for sym, old, new, price in label_changes if "BUY" in new]
-    sell_changes = [(sym, old, new, price) for sym, old, new, price in label_changes if "SELL" in new]
+    buy_changes  = [c for c in label_changes if "BUY" in c[2]]
+    sell_changes = [c for c in label_changes if "SELL" in c[2]]
 
     buy_events  = [e for e in new_events if e["type"] in ("BOUNCE SETUP", "RSI OVERSOLD", "MOMENTUM BREAKOUT", "RESISTANCE BREAKOUT")]
     sell_events = [e for e in new_events if e["type"] == "TAKE PROFIT"]
@@ -335,12 +368,14 @@ def build_standalone_alerts(label_changes, new_events, now_str):
     buy_msg = None
     if buy_changes or buy_events:
         lines = ["BUY ALERT — Opportunity Now", ""]
-        for sym, old_lbl, new_lbl, price in buy_changes:
+        for sym, old_lbl, new_lbl, price, detail in buy_changes:
             lines += [
                 f'<b>{sym}  ${price}</b>  {old_lbl} -> <b>{new_lbl}</b>',
                 f'  Signal flipped to BUY — entry opportunity now.',
-                "",
             ]
+            opt_line = _options_line(sym, new_lbl, detail)
+            if opt_line: lines.append(opt_line)
+            lines.append("")
         for e in buy_events:
             lines += [
                 f'<b>{e["sym"]}  ${e["price"]}</b> — {e["type"]}',
@@ -355,12 +390,14 @@ def build_standalone_alerts(label_changes, new_events, now_str):
     sell_msg = None
     if sell_changes or sell_events:
         lines = ["SELL ALERT — Act Now", ""]
-        for sym, old_lbl, new_lbl, price in sell_changes:
+        for sym, old_lbl, new_lbl, price, detail in sell_changes:
             lines += [
                 f'<b>{sym}  ${price}</b>  {old_lbl} -> <b>{new_lbl}</b>',
                 f'  Signal flipped to SELL — consider taking profit now.',
-                "",
             ]
+            opt_line = _options_line(sym, new_lbl, detail)
+            if opt_line: lines.append(opt_line)
+            lines.append("")
         for e in sell_events:
             lines += [
                 f'<b>{e["sym"]}  ${e["price"]}</b> — {e["type"]}',
@@ -408,18 +445,16 @@ if __name__ == "__main__":
 
     for sym in PORTFOLIO:
         # Check for daily label change
-        new_lbl = get_daily_signal_label(sym)
+        detail  = get_daily_signal_detail(sym)
+        new_lbl = detail["label"] if detail else None
         old_lbl = state["signals"].get(sym)
 
         if new_lbl and new_lbl != old_lbl:
             # Only report if moving to/from an actionable signal
             actionable = {"BUY", "STRONG BUY", "SELL", "STRONG SELL"}
             if new_lbl in actionable or (old_lbl and old_lbl in actionable):
-                try:
-                    price = round(yf.Ticker(sym).history(period="1d")["Close"].iloc[-1], 2)
-                except Exception:
-                    price = "?"
-                label_changes.append((sym, old_lbl or "—", new_lbl, price))
+                price = round(detail["price"], 2) if detail and detail.get("price") else "?"
+                label_changes.append((sym, old_lbl or "—", new_lbl, price, detail))
                 log.info(f"  {sym}: label changed {old_lbl} -> {new_lbl}")
             state["signals"][sym] = new_lbl
 
