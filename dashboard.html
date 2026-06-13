@@ -882,7 +882,7 @@ function updateHeader() {
     dot.className = 'live-dot';
     const d = lastData[activeTab];
     if (d?.last_updated) {
-      const ago = Math.round((Date.now() - new Date(d.last_updated)) / 60000);
+      const ago = Math.round((Date.now() - new Date(d.last_updated + 'Z')) / 60000);
       label.textContent = ago < 1 ? 'Just updated' : `Updated ${ago}m ago`;
     }
     banner.style.display = 'none';
@@ -912,7 +912,7 @@ function renderStatsBar(market, data) {
   const buys  = sigs.filter(s => s.label.includes('BUY')).length;
   const sells = sigs.filter(s => s.label.includes('SELL')).length;
   const holds = sigs.filter(s => s.label === 'HOLD').length;
-  const ts    = data.last_updated ? new Date(data.last_updated).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+  const ts    = data.last_updated ? new Date(data.last_updated + 'Z').toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
 
   el.innerHTML = `
     <div class="stat-item"><div class="stat-val">${sigs.length}</div><div class="stat-lbl">Tracked</div></div>
