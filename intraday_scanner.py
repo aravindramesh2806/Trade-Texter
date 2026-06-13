@@ -29,9 +29,35 @@ logging.basicConfig(
 log = logging.getLogger("intraday")
 
 # ── Config ───────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = "8955387419:AAHEmmHoibcYkv2MRcFElzX__4TOrP55PjQ"
-TELEGRAM_CHAT_ID = "1578063059"
+_CFG_FILE = os.path.join(DIR, "config.json")
+
+def _load_config():
+    if os.path.exists(_CFG_FILE):
+        try:
+            return json.load(open(_CFG_FILE))
+        except Exception:
+            pass
+    return {}
+
+def _cred(env_key, *cfg_keys, default=""):
+    """Prefer the env var, then config.json (accepts both key styles), then default."""
+    val = os.environ.get(env_key)
+    if val:
+        return val
+    cfg = _load_config()
+    for k in cfg_keys:
+        if cfg.get(k):
+            return cfg[k]
+    return default
+
+TELEGRAM_TOKEN   = _cred("TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_TOKEN", "telegram_token",
+                         default="YOUR_BOT_TOKEN_HERE")
+TELEGRAM_CHAT_ID = _cred("TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID", "telegram_chat_id",
+                         default="YOUR_CHAT_ID_HERE")
 PORTFOLIO        = ["AAPL", "GOOGL", "PLTR", "VOO", "NVDA", "AMD", "AMZN", "CRM"]
+
+# Alert only when signal type changes OR confidence shifts by more than this.
+CONFIDENCE_SHIFT_THRESHOLD = 10
 
 RSI_OVERSOLD   = 35
 RSI_OVERBOUGHT = 72
@@ -165,13 +191,81 @@ def calc_rsi(series, period=14):
         return 100.0
     return safe_float(100 - 100 / (1 + gg / lg))
 
-def get_daily_signal_label(sym):
+def build_signal(s):
+    """Take a base signal dict and return it enriched with the richer
+    beginner-friendly fields, preserving all original fields."""
+    score = s.get("score", 0)
+    rsi = s.get("rsi", 50)
+    price = s.get("price", 0) or 0
+    support = s.get("support", price * 0.95)
+    resistance = s.get("resistance", price * 1.05)
+    stop_loss = s.get("stop_loss", round(price * 0.95, 2))
+    label = s.get("label", "HOLD")
+    pct = s.get("pct", 0) or 0
+    atr = s.get("atr") or (price * 0.02 if price else 1)
+    safe_price = price if price else 1
+
+    if "BUY" in label:
+        rsi_contrib = max(0, min(40, int((rsi - 30) / 40 * 40)))
+    else:
+        rsi_contrib = max(0, min(40, int((70 - rsi) / 40 * 40)))
+    confidence = min(95, max(10, abs(score) * 12 + rsi_contrib))
+
+    if atr / safe_price > 0.04 or abs(pct) > 3:
+        risk_band = "High"
+    elif atr / safe_price > 0.02 or abs(pct) > 1.5:
+        risk_band = "Medium"
+    else:
+        risk_band = "Low"
+
+    if score >= 4:
+        setup_type = "Breakout" if price > resistance * 0.98 else "Momentum"
+    elif score <= -2:
+        setup_type = "Breakdown"
+    elif score <= 1 and label == "HOLD":
+        setup_type = "Range"
+    elif rsi < 35:
+        setup_type = "Reversal"
+    else:
+        setup_type = "Trend"
+
+    entry_low = round(safe_price * 0.99, 2)
+    entry_high = round(safe_price, 2)
+    entry_zone = f"${entry_low:.2f} – ${entry_high:.2f}"
+    target_1 = round(price + (resistance - price) * 0.5, 2)
+    target_2 = round(resistance, 2)
+
+    if "BUY" in label:
+        beginner_note = (f"Consider entering between {entry_zone}. First target is "
+                         f"${target_1:.2f}. Exit if price falls below ${stop_loss:.2f}.")
+    elif "SELL" in label:
+        beginner_note = (f"This stock is showing weakness. If you hold it, consider "
+                         f"setting a stop at ${stop_loss:.2f}.")
+    else:
+        beginner_note = (f"No clear signal right now. Watch for price to break above "
+                         f"${resistance:.2f} or below ${support:.2f} before acting.")
+
+    return {
+        **s,
+        "ticker": s.get("symbol", ""),
+        "signal": label,
+        "setup_type": setup_type,
+        "risk_band": risk_band,
+        "confidence": confidence,
+        "entry_zone": entry_zone,
+        "target_1": target_1,
+        "target_2": target_2,
+        "invalidation": stop_loss,
+        "beginner_note": beginner_note,
+    }
+
+
+def get_daily_signal(sym):
     """
-    Quick daily-bar signal (BUY / SELL / HOLD) using same logic as morning alert.
-    Used to detect label changes between scans.
+    Quick daily-bar signal using same logic as morning alert.
+    Returns a full signal dict enriched via build_signal(), or None.
     """
-    detail = get_daily_signal_detail(sym)
-    return detail["label"] if detail else None
+    return get_daily_signal_detail(sym)
 
 def get_daily_signal_detail(sym):
     """
@@ -184,8 +278,10 @@ def get_daily_signal_detail(sym):
             return None
         close = hist["Close"].dropna()
         price = safe_float(close.iloc[-1])
+        prev  = safe_float(close.iloc[-2]) if len(close) >= 2 else None
         if not price:
             return None
+        pct = ((price - prev) / prev * 100) if (prev and prev != 0) else 0.0
 
         rsi   = calc_rsi(close)
         ema50 = safe_float(close.ewm(span=50, adjust=False).mean().iloc[-1])
@@ -224,10 +320,42 @@ def get_daily_signal_detail(sym):
         elif score <= -2: label = "SELL"
         else:             label = "HOLD"
 
-        return {"label": label, "price": price, "support": support, "resistance": resistance}
+        stop_loss = round(support * 0.98, 2)
+        base = {
+            "symbol": sym, "price": round(price, 2), "pct": round(pct, 2),
+            "rsi": round(rsi, 1), "score": score, "label": label,
+            "support": round(support, 2), "resistance": round(resistance, 2),
+            "stop_loss": stop_loss,
+        }
+        return build_signal(base)
     except Exception as e:
         log.warning(f"{sym} daily signal error: {e}")
         return None
+
+
+def get_daily_signal_label(sym):
+    """Backward-compatible wrapper — returns just the label string or None."""
+    sig = get_daily_signal(sym)
+    return sig["label"] if sig else None
+
+
+def format_intraday_alert(signal):
+    """Format the richer signal fields into a readable Telegram message."""
+    s = signal
+    day_chg = f'+{s["pct"]}%' if s.get("pct", 0) >= 0 else f'{s["pct"]}%'
+    lines = [
+        f'<b>{s["symbol"]}</b>  ${s["price"]}  ({day_chg})  <b>{s["label"]}</b>',
+        f'  Setup: {s.get("setup_type","—")}   Risk: {s.get("risk_band","—")}   Confidence: {s.get("confidence","—")}%',
+    ]
+    if s.get("entry_zone"):
+        lines.append(f'  Entry zone: {s["entry_zone"]}')
+    if s.get("target_1") is not None:
+        lines.append(f'  Target 1: ${s["target_1"]}   Target 2: ${s.get("target_2","—")}')
+    if s.get("invalidation") is not None:
+        lines.append(f'  Invalidation (stop): ${s["invalidation"]}')
+    if s.get("beginner_note"):
+        lines.append(f'  <i>{s["beginner_note"]}</i>')
+    return "\n".join(lines)
 
 
 # ── Intraday event detection ──────────────────────────────────────
@@ -328,7 +456,8 @@ def scan_intraday_events(sym):
 
 # ── Message builders ──────────────────────────────────────────────
 
-def build_change_message(label_changes, new_events, now_str):
+def build_change_message(label_changes, new_events, now_str, rich_signals=None):
+    rich_signals = rich_signals or {}
     lines = [f"<b>McLean Trade Bot — Update {now_str}</b>"]
 
     if label_changes:
@@ -337,6 +466,8 @@ def build_change_message(label_changes, new_events, now_str):
         for sym, old_lbl, new_lbl, price, detail in label_changes:
             day_indicator = "  <-- BUY" if "BUY" in new_lbl else ("  <-- SELL NOW" if "SELL" in new_lbl else "")
             lines.append(f'<b>{sym}</b>  ${price}   {old_lbl} -> <b>{new_lbl}</b>{day_indicator}')
+            if sym in rich_signals:
+                lines.append(format_intraday_alert(rich_signals[sym]))
             opt_line = _options_line(sym, new_lbl, detail)
             if opt_line: lines.append(opt_line)
 
@@ -414,6 +545,10 @@ def build_standalone_alerts(label_changes, new_events, now_str):
 # ── Main ──────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == "YOUR_BOT_TOKEN_HERE":
+        log.warning("No Telegram token in env or config.json — exiting cleanly without sending alerts.")
+        sys.exit(0)
+
     if not is_market_hours():
         log.info(f"Outside market hours — skipping scan.")
         sys.exit(0)
@@ -424,16 +559,23 @@ if __name__ == "__main__":
 
     state = load_state()
 
+    def old_entry(sym):
+        """Read prior state for a ticker, tolerating old (string) state format."""
+        v = state["signals"].get(sym)
+        if isinstance(v, dict):
+            return v.get("label"), v.get("confidence")
+        return v, None  # legacy: label string only
+
     # Is this the first scan of the day? If so, just seed state, don't alert
     # (the 7AM daily alert already sent full details)
     is_first_scan = len(state["signals"]) == 0
     if is_first_scan:
         log.info("First scan of the day — seeding state, no alert sent.")
         for sym in PORTFOLIO:
-            lbl = get_daily_signal_label(sym)
-            if lbl:
-                state["signals"][sym] = lbl
-                log.info(f"  {sym}: {lbl}")
+            sig = get_daily_signal(sym)
+            if sig:
+                state["signals"][sym] = {"label": sig["label"], "confidence": sig["confidence"]}
+                log.info(f"  {sym}: {sig['label']} ({sig['confidence']}%)")
         save_state(state)
         sys.exit(0)
 
@@ -442,21 +584,28 @@ if __name__ == "__main__":
 
     label_changes = []   # (sym, old_label, new_label, price)
     new_events    = []   # intraday events not yet alerted today
+    rich_signals  = {}   # sym -> enriched signal dict (for richer alert formatting)
 
     for sym in PORTFOLIO:
-        # Check for daily label change
-        detail  = get_daily_signal_detail(sym)
-        new_lbl = detail["label"] if detail else None
-        old_lbl = state["signals"].get(sym)
+        # Check for daily label / confidence change
+        sig = get_daily_signal(sym)
+        new_lbl  = sig["label"] if sig else None
+        new_conf = sig["confidence"] if sig else None
+        old_lbl, old_conf = old_entry(sym)
 
-        if new_lbl and new_lbl != old_lbl:
-            # Only report if moving to/from an actionable signal
-            actionable = {"BUY", "STRONG BUY", "SELL", "STRONG SELL"}
-            if new_lbl in actionable or (old_lbl and old_lbl in actionable):
-                price = round(detail["price"], 2) if detail and detail.get("price") else "?"
-                label_changes.append((sym, old_lbl or "—", new_lbl, price, detail))
-                log.info(f"  {sym}: label changed {old_lbl} -> {new_lbl}")
-            state["signals"][sym] = new_lbl
+        if sig:
+            rich_signals[sym] = sig
+            label_changed = new_lbl != old_lbl
+            conf_shifted  = old_conf is not None and abs(new_conf - old_conf) >= CONFIDENCE_SHIFT_THRESHOLD
+            if label_changed or conf_shifted:
+                # Only report if moving to/from an actionable signal
+                actionable = {"BUY", "STRONG BUY", "SELL", "STRONG SELL"}
+                if new_lbl in actionable or (old_lbl and old_lbl in actionable):
+                    price = round(sig["price"], 2) if sig.get("price") else "?"
+                    label_changes.append((sym, old_lbl or "—", new_lbl, price, sig))
+                    reason = "label change" if label_changed else f"confidence {old_conf}%→{new_conf}%"
+                    log.info(f"  {sym}: {reason}  {old_lbl} -> {new_lbl}")
+            state["signals"][sym] = {"label": new_lbl, "confidence": new_conf}
 
         # Check for new intraday events
         events = scan_intraday_events(sym)
@@ -482,7 +631,7 @@ if __name__ == "__main__":
             time.sleep(1)
 
         # Then send the full change summary
-        msg = build_change_message(label_changes, new_events, now_str)
+        msg = build_change_message(label_changes, new_events, now_str, rich_signals)
         log.info(f"Sending update: {len(label_changes)} changes, {len(new_events)} events")
         print(msg)
         send_telegram(msg)
