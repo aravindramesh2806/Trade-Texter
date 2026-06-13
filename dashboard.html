@@ -358,6 +358,14 @@
     .mopt .flag { font-size: 18px; display: block; margin-bottom: 3px; }
     .mopt .mn { font-size: 11px; font-weight: 600; }
     .mopt .ms { font-size: 10px; color: var(--muted); }
+    .ticker-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .ticker-chip { display: flex; align-items: center; gap: 6px; background: var(--bg2, rgba(255,255,255,0.04)); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; }
+    .ticker-chip .x { cursor: pointer; color: var(--muted); font-weight: 700; }
+    .ticker-chip .x:hover { color: var(--red); }
+    .mp-field { display: flex; gap: 8px; align-items: flex-end; }
+    .mp-field > div { flex: 1; }
+    .mp-field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .mp-field input { width: 100%; box-sizing: border-box; }
     .hint { font-size: 11px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
     .notice { padding: 9px 12px; border-radius: 7px; font-size: 12px; margin-top: 10px; display: none; }
     .notice.ok  { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
@@ -448,6 +456,7 @@
     <div class="chart-status" id="trend-status" style="display:none">Loading…</div>
   </div>
   <div class="stats-bar" id="us-stats"></div>
+  <div id="us-myportfolio"></div>
   <div id="us-toppicks"></div>
   <div id="us-content"><div class="loading-box"><div class="big-spinner"></div><p>Running initial scan…</p><small>Portfolio results appear in ~30 seconds</small></div></div>
 </div>
@@ -456,12 +465,34 @@
 <div class="panel" id="panel-india">
   <div class="mood-bar" id="india-mood"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
   <div class="stats-bar" id="india-stats"></div>
+  <div id="india-myportfolio"></div>
   <div id="india-content"><div class="loading-box"><div class="big-spinner"></div><p>Running initial scan…</p><small>Portfolio results appear in ~30 seconds</small></div></div>
 </div>
 
 <!-- ── Setup Panel ── -->
 <div class="panel" id="panel-setup">
   <div class="setup-grid">
+
+    <!-- My Portfolio -->
+    <div class="setup-card" style="grid-column:1/-1">
+      <h3>📋 My Portfolio</h3>
+      <p class="sub">Add your own stock tickers to get personalized signals, sector exposure, and news on the US Stocks / India NSE tabs — shown above the default portfolio. Saved only on this device.</p>
+
+      <div class="market-opts">
+        <div class="mopt sel" id="mp-opt-us" onclick="selPortfolioMarket('us')"><span class="flag">🇺🇸</span><div class="mn">US</div></div>
+        <div class="mopt" id="mp-opt-india" onclick="selPortfolioMarket('india')"><span class="flag">🇮🇳</span><div class="mn">India (NSE)</div></div>
+      </div>
+
+      <div class="mp-field">
+        <div>
+          <label>Add ticker</label>
+          <input id="mp-input" type="text" placeholder="e.g. TSLA" onkeydown="if(event.key==='Enter'){addPortfolioTicker();}"/>
+        </div>
+        <button class="btn btn-primary" onclick="addPortfolioTicker()">Add</button>
+      </div>
+      <div class="ticker-chips" id="mp-chips"></div>
+      <div class="hint" style="margin-top:8px">Up to 25 tickers per market. Remove a ticker by clicking the ✕ on its chip.</div>
+    </div>
 
     <!-- Telegram config -->
     <div class="setup-card">
@@ -574,6 +605,9 @@ fetchAll();
 schedulePoll();
 loadMarketTrend();
 setInterval(loadMarketTrend, 60000);
+renderPortfolioChips();
+fetchCustomPortfolio('us');
+fetchCustomPortfolio('india');
 
 // ── Top Assets ──────────────────────────────────────────────────────
 let trendRange = '1d';
@@ -990,6 +1024,92 @@ function renderContent(market, data) {
   el.innerHTML = html;
 
   if (best) loadCardSpark(india ? `${best.symbol}.NS` : best.symbol, `best-svg-${best.symbol}`, 600, 72);
+}
+
+// ── My Portfolio (user-defined custom watchlist, stored in localStorage) ──
+let mpMarket = 'us';
+
+function customPortfolioKey(market) { return 'tt_custom_portfolio_' + market; }
+
+function getCustomPortfolio(market) {
+  try { return JSON.parse(localStorage.getItem(customPortfolioKey(market))) || []; }
+  catch(e) { return []; }
+}
+
+function setCustomPortfolio(market, syms) {
+  localStorage.setItem(customPortfolioKey(market), JSON.stringify(syms));
+}
+
+function selPortfolioMarket(m) {
+  mpMarket = m;
+  document.getElementById('mp-opt-us').classList.toggle('sel', m === 'us');
+  document.getElementById('mp-opt-india').classList.toggle('sel', m === 'india');
+  renderPortfolioChips();
+}
+
+function renderPortfolioChips() {
+  const syms = getCustomPortfolio(mpMarket);
+  const el = document.getElementById('mp-chips');
+  el.innerHTML = syms.length
+    ? syms.map(s => `<div class="ticker-chip">${s}<span class="x" onclick="removePortfolioTicker('${s}')">✕</span></div>`).join('')
+    : `<div style="font-size:12px;color:var(--muted)">No tickers added yet — add one above.</div>`;
+}
+
+function addPortfolioTicker() {
+  const input = document.getElementById('mp-input');
+  const sym = input.value.trim().toUpperCase().replace(/\.NS$/, '');
+  if (!sym) return;
+  const syms = getCustomPortfolio(mpMarket);
+  if (syms.includes(sym)) { input.value = ''; return; }
+  if (syms.length >= 25) { alert('Max 25 tickers per market.'); return; }
+  syms.push(sym);
+  setCustomPortfolio(mpMarket, syms);
+  input.value = '';
+  renderPortfolioChips();
+  fetchCustomPortfolio(mpMarket);
+}
+
+function removePortfolioTicker(sym) {
+  const syms = getCustomPortfolio(mpMarket).filter(s => s !== sym);
+  setCustomPortfolio(mpMarket, syms);
+  renderPortfolioChips();
+  fetchCustomPortfolio(mpMarket);
+}
+
+async function fetchCustomPortfolio(market) {
+  const syms = getCustomPortfolio(market);
+  const el = document.getElementById(market + '-myportfolio');
+  if (!el) return;
+  if (!syms.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="loading-box" style="padding:24px"><div class="big-spinner"></div><p>Loading your portfolio…</p></div>`;
+  try {
+    const r = await fetch(`/api/custom-signals?market=${market}&symbols=${syms.join(',')}`);
+    const data = await r.json();
+    renderMyPortfolio(market, data, syms);
+  } catch(e) {
+    el.innerHTML = `<div class="error-box"><div class="err-icon">⚠️</div><p>Couldn't load your portfolio. Try again shortly.</p></div>`;
+  }
+}
+
+function renderMyPortfolio(market, data, syms) {
+  const el = document.getElementById(market + '-myportfolio');
+  const india = market === 'india';
+  if (data.error && !(data.signals || []).length) {
+    el.innerHTML = `<div class="error-box"><div class="err-icon">⚠️</div><p>${data.error}</p></div>`;
+    return;
+  }
+  const sigs = data.signals || [];
+  let html = section('📋 My Portfolio', sigs.length, 'Your custom watchlist — saved on this device');
+  if (data.sector_concentration_warning) {
+    html += `<div class="sector-warn">⚠️ ${data.sector_concentration_warning}</div>`;
+  }
+  if (sigs.length) {
+    html += `<div class="cards-grid">${sigs.map(s => sigCard(s, india)).join('')}</div>`;
+  } else {
+    html += `<div class="loading-box" style="padding:20px"><p>No data yet for: ${syms.join(', ')}</p></div>`;
+  }
+  html += `<div class="page-end"></div>`;
+  el.innerHTML = html;
 }
 
 function section(title, count, sub='') {

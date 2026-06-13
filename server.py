@@ -943,6 +943,49 @@ def run_backtest(sym, ns=False, period="2y", hold_days=10):
         log.warning(f"backtest {sym}: {e}")
         return {"error": str(e)}
 
+# ── On-demand scoring for a user-supplied custom portfolio ─────────
+# Lighter weight than the full background scan: no penny/watchlist
+# phases, capped symbol count, shorter history window for speed.
+CUSTOM_SYMBOLS_MAX = 25
+
+def run_custom_scan(symbols, ns=False):
+    symbols = [s.strip().upper() for s in symbols if s.strip()][:CUSTOM_SYMBOLS_MAX]
+    if not symbols:
+        return {"signals": [], "sector_exposure": {}, "sector_concentration_warning": None,
+                "market_bearish": False, "index_pct": None, "error": None}
+    try:
+        proxy = "NIFTYBEES.NS" if ns else "SPY"
+        idx_pct, bearish = market_mood(proxy)
+        mkt_ctx = ("NIFTY" if ns else "S&P 500", idx_pct, bearish)
+
+        hist = batch_dl(symbols, "1y", ns=ns)
+        fund = get_fundamentals_batch(symbols, ns=ns)
+        news = get_news_earnings_batch(symbols, ns=ns)
+        reddit = get_reddit_buzz() if not ns else {}
+
+        signals = []
+        for sym in symbols:
+            r = score(sym, hist.get(sym), ns=ns)
+            if not r:
+                continue
+            if bearish and "BUY" in r["label"]:
+                r["label"] = "HOLD"
+                r["why"] = f"Suppressed — {mkt_ctx[0]} down {idx_pct}%"
+            extra = dict(news.get(sym) or {})
+            if sym in reddit:
+                extra["reddit"] = reddit[sym]
+            r = build_signal(r, fund.get(sym), mkt_ctx, extra=extra)
+            signals.append(r)
+
+        out = {"signals": signals, "market_bearish": bearish, "index_pct": idx_pct,
+               "last_updated": datetime.now().isoformat(), "error": None}
+        out.update(_sector_exposure(signals))
+        return out
+    except Exception as e:
+        log.error(f"custom scan crashed: {e}", exc_info=True)
+        return {"signals": [], "sector_exposure": {}, "sector_concentration_warning": None,
+                "market_bearish": False, "index_pct": None, "error": str(e)}
+
 def background_loop():
     while True:
         try:
@@ -1060,6 +1103,7 @@ class Handler(SimpleHTTPRequestHandler):
         elif p.path=="/api/config":  self._json(200,read_config())
         elif p.path=="/api/scan":    self._trigger_scan(p)
         elif p.path=="/api/backtest": self._backtest(p)
+        elif p.path=="/api/custom-signals": self._custom_signals(p)
         elif p.path=="/api/notify-test": self._test_notify()
         else: super().do_GET()
 
@@ -1125,6 +1169,15 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception: hold_days = 10
         result = run_backtest(sym, ns=(mkt=="india"), hold_days=hold_days)
         self._json(200 if "error" not in result else 500, result)
+
+    def _custom_signals(self,p):
+        q   = parse_qs(p.query)
+        mkt = q.get("market",["us"])[0].lower()
+        if mkt not in ("us","india"): self._json(400,{"error":"invalid market"}); return
+        syms = [s for s in q.get("symbols",[""])[0].split(",") if s.strip()]
+        if not syms: self._json(400,{"error":"symbols required"}); return
+        result = run_custom_scan(syms, ns=(mkt=="india"))
+        self._json(200 if result.get("error") is None else 500, result)
 
     def _trigger_scan(self,p):
         mkt = parse_qs(p.query).get("market",["both"])[0].lower()
