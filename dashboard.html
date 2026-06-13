@@ -592,6 +592,7 @@ let lastData    = { us: null, india: null };
 let pollTimer   = null;
 let nextScanIn  = 0;   // seconds until next auto-scan
 let scanTick    = null;
+let mpMarket    = 'us';   // active market for the My Portfolio settings card
 
 const CHART_US    = s => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(s)}`;
 const CHART_INDIA = s => `https://www.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(s)}`;
@@ -1027,8 +1028,6 @@ function renderContent(market, data) {
 }
 
 // ── My Portfolio (user-defined custom watchlist, stored in localStorage) ──
-let mpMarket = 'us';
-
 function customPortfolioKey(market) { return 'tt_custom_portfolio_' + market; }
 
 function getCustomPortfolio(market) {
