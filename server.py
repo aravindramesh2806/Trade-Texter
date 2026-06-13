@@ -951,6 +951,16 @@ def run_backtest(sym, ns=False, period="2y", hold_days=10):
 _OPTIONS_CACHE = {}
 _OPTIONS_CACHE_TTL = 15 * 60  # seconds
 
+# Liquid, reliably-optionable US large-caps used to keep the Options tab
+# populated with real data when no portfolio/watchlist ticker has an active
+# BUY/SELL signal. These produce "directional lean" ideas (see
+# get_options_fallback) — not fired signals — using live option-chain quotes.
+OPTIONS_FALLBACK_UNIVERSE = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META",
+    "TSLA", "AMD", "NFLX", "JPM", "SPY", "QQQ",
+]
+OPTIONS_MIN = 6  # ensure at least this many real ideas show before falling back
+
 def _pick_contract(chain_df, target_strike, is_call, expiry, days):
     if chain_df is None or chain_df.empty:
         return None
@@ -1035,6 +1045,35 @@ def get_options_suggestion(sym, signal):
         log.debug(f"options {sym}: {e}")
         return None
 
+def get_options_fallback(sym):
+    """Generate a live option idea for a liquid large-cap that has no active
+    BUY/SELL signal, so the Options tab always shows real data. The direction
+    is a *lean* from the score engine (non-negative score -> call near support,
+    negative -> put near resistance), not a fired signal. Strikes and premiums
+    still come from live yfinance option chains. Returns None on any error."""
+    try:
+        hist = batch_dl([sym], period="1y").get(sym)
+        if hist is None:
+            return None
+        s = score(sym, hist, check_recency=False)
+        if not s:
+            return None
+        bullish = s.get("score", 0) >= 0
+        s = dict(s)
+        s["label"] = "BUY" if bullish else "SELL"   # force a direction for the chain picker
+        r = get_options_suggestion(sym, s)
+        if not r:
+            return None
+        r = dict(r)   # don't mutate the shared options cache entry
+        r["fallback"] = True
+        r["lean"] = "bullish" if bullish else "bearish"
+        r["signal"] = "WATCH"          # honest: not a fired signal
+        r["price_pct"] = s.get("pct")
+        return r
+    except Exception as e:
+        log.debug(f"options fallback {sym}: {e}")
+        return None
+
 def run_options_scan():
     """Build options suggestions for every US ticker currently showing a
     BUY/SELL signal across the portfolio, watchlist top picks, and top
@@ -1065,6 +1104,20 @@ def run_options_scan():
             if r:
                 r["price_pct"] = s.get("pct")
                 picks.append(r)
+
+        # Always-on fallback: if there aren't enough signal-based ideas, top up
+        # with live large-cap option ideas so the tab shows real data rather
+        # than an empty/demo state.
+        if len(picks) < OPTIONS_MIN:
+            have = {p["symbol"] for p in picks}
+            for sym in OPTIONS_FALLBACK_UNIVERSE:
+                if len(picks) >= OPTIONS_MIN:
+                    break
+                if sym in have:
+                    continue
+                r = get_options_fallback(sym)
+                if r:
+                    picks.append(r)
 
         with _lock:
             _cache["us"]["options_picks"] = picks
